@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rss}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rss}
+      POSTGRES_DB: ${POSTGRES_DB:-rssreader}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rss} -d ${POSTGRES_DB:-rssreader}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+  backend:
+    build:
+      context: ./backend
+    image: ${REGISTRY:-localhost}/rss-reader-backend:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-rss}:${POSTGRES_PASSWORD:-rss}@db:5432/${POSTGRES_DB:-rssreader}
+      BIND_ADDR: 0.0.0.0:8080
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      FEED_REFRESH_INTERVAL_SECS: ${FEED_REFRESH_INTERVAL_SECS:-900}
+      RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    image: ${REGISTRY:-localhost}/rss-reader-frontend:${TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT:-8081}:80"
+
+volumes:
+  pgdata:
