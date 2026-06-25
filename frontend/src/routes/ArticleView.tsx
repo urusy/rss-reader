@@ -9,12 +9,14 @@ export default function ArticleView() {
   const [busy, setBusy] = createSignal<"summarize" | "translate" | null>(null);
 
   const run = async (kind: "summarize" | "translate") => {
+    const id = params.id;
+    if (!id) return;
     setBusy(kind);
     try {
       const updated: Article =
         kind === "summarize"
-          ? await api.summarize(params.id, "ja")
-          : await api.translate(params.id, "ja");
+          ? await api.summarize(id, "ja")
+          : await api.translate(id, "ja");
       mutate(updated);
     } catch (e) {
       alert(`処理に失敗しました: ${String(e)}`);
