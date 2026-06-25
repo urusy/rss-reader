@@ -35,3 +35,41 @@ pub struct Feed {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_fetched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_accepts_https_url() {
+        let url = FeedUrl::parse("https://example.com/feed.xml").unwrap();
+        assert_eq!(url.as_str(), "https://example.com/feed.xml");
+    }
+
+    #[test]
+    fn parse_accepts_http_url() {
+        let url = FeedUrl::parse("http://example.com/rss").unwrap();
+        assert_eq!(url.as_str(), "http://example.com/rss");
+    }
+
+    #[test]
+    fn parse_trims_surrounding_whitespace() {
+        let url = FeedUrl::parse("  https://example.com/feed.xml  ").unwrap();
+        assert_eq!(url.as_str(), "https://example.com/feed.xml");
+    }
+
+    #[test]
+    fn parse_rejects_url_without_scheme() {
+        assert!(FeedUrl::parse("example.com/feed.xml").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_non_http_scheme() {
+        assert!(FeedUrl::parse("ftp://example.com/feed.xml").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_empty_input() {
+        assert!(FeedUrl::parse("").is_err());
+    }
+}
