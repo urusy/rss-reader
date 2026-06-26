@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # --- Dependency planning (cargo-chef) -------------------------------------
-FROM rust:1.82-slim-bookworm AS chef
+# Build image tracks a recent stable Rust (>= 1.85 for edition2024, required by
+# current cargo-chef deps). The crate's MSRV (Cargo.toml rust-version) stays 1.82.
+FROM rust:1.90-slim-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
