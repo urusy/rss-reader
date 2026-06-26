@@ -46,6 +46,10 @@ export interface Stats {
   unread: number;
 }
 
+export interface InstapaperStatus {
+  configured: boolean;
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -112,6 +116,21 @@ export const api = {
       body: JSON.stringify({ feed_id: params?.feed_id ?? null }),
     }),
   getStats: () => http<Stats>("/api/stats"),
+
+  getInstapaperStatus: () => http<InstapaperStatus>("/api/instapaper/status"),
+  saveInstapaperCredentials: (creds: { username: string; password: string }) =>
+    http<InstapaperStatus>("/api/instapaper/credentials", {
+      method: "PUT",
+      body: JSON.stringify(creds),
+    }),
+  deleteInstapaperCredentials: () =>
+    http<void>("/api/instapaper/credentials", { method: "DELETE" }),
+  // 05 が所有する POST /api/read-later の呼び口。記事 id を取る（生 URL は取らない）。
+  saveToReadLater: (articleId: string) =>
+    http<void>("/api/read-later", {
+      method: "POST",
+      body: JSON.stringify({ article_id: articleId }),
+    }),
   summarize: (id: string, lang = "ja") =>
     http<Article>(`/api/articles/${id}/summarize`, {
       method: "POST",

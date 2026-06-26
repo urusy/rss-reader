@@ -5,6 +5,7 @@ import "./app.css";
 import App from "./App";
 import FeedList from "./routes/FeedList";
 import ArticleView from "./routes/ArticleView";
+import Settings from "./routes/Settings";
 import { initTheme } from "./lib/theme";
 
 const root = document.getElementById("root");
@@ -17,6 +18,7 @@ render(
     <Router root={App}>
       <Route path="/" component={FeedList} />
       <Route path="/articles/:id" component={ArticleView} />
+      <Route path="/settings" component={Settings} />
     </Router>
   ),
   root,
