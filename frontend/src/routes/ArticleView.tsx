@@ -123,7 +123,10 @@ export default function ArticleView() {
           <Show when={a().summary}>
             <section class="rounded-lg border border-border bg-muted/40 p-4">
               <h2 class="text-sm font-semibold mb-1">要約</h2>
-              <p class="text-sm whitespace-pre-wrap">{a().summary}</p>
+              {/* prose は本文/翻訳と基本タイポを揃えるため（要約はテキストノードのため Markdown は描画されない） */}
+              <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+                {a().summary}
+              </div>
             </section>
           </Show>
 

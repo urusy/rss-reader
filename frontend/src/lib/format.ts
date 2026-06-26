@@ -1,3 +1,20 @@
+/**
+ * ISO 8601 → 「YYYY/MM/DD」。タイムゾーンを Asia/Tokyo に固定し、実行環境の TZ に
+ * 依存しない決定的な出力にする（単一ユーザ=JST 前提）。不正な ISO は空文字。
+ */
+const dateFormatter = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+export function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return dateFormatter.format(d); // 例: "2026/06/26"
+}
+
 /** ISO日時 → 「投稿なし / 今日 / 昨日 / N日前」 */
 export function lastPostLabel(iso: string | null, now: Date = new Date()): string {
   if (!iso) return "投稿なし";

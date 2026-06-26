@@ -5,6 +5,7 @@ import { useSelection } from "@/lib/selection";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -80,18 +81,28 @@ export default function ArticleList() {
           <div class="divide-y divide-border">
             <For each={articles()}>
               {(a) => (
-                <A href={`/articles/${a.id}`} class="block py-3 hover:bg-accent">
+                <A
+                  href={`/articles/${a.id}`}
+                  class="-mx-2 block rounded-md px-2 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <p
                     class={cn(
-                      "text-sm font-medium",
-                      a.is_read && "font-normal text-muted-foreground",
+                      "line-clamp-2 text-sm",
+                      a.is_read
+                        ? "font-normal text-muted-foreground"
+                        : "font-semibold text-foreground",
                     )}
                   >
                     {a.title}
                   </p>
                   <Show when={a.summary}>
-                    <p class="line-clamp-1 text-sm text-muted-foreground">
+                    <p class="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
                       {a.summary}
+                    </p>
+                  </Show>
+                  <Show when={a.published_at}>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                      {formatDate(a.published_at!)}
                     </p>
                   </Show>
                 </A>
