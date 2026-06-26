@@ -7,6 +7,7 @@ use uuid::Uuid;
 use super::domain::{Article, ArticleId};
 use super::service;
 use crate::features::feeds::domain::FeedId;
+use crate::features::folders::domain::FolderId;
 use crate::shared::error::AppResult;
 use crate::shared::state::AppState;
 
@@ -15,13 +16,23 @@ pub struct ListQuery {
     pub feed_id: Option<Uuid>,
     #[serde(default)]
     pub unread: bool,
+    pub folder_id: Option<Uuid>,
+    #[serde(default)]
+    pub unclassified: bool,
 }
 
 pub async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> AppResult<Json<Vec<Article>>> {
-    let articles = service::list_articles(&state, q.feed_id.map(FeedId), q.unread).await?;
+    let articles = service::list_articles(
+        &state,
+        q.feed_id.map(FeedId),
+        q.unread,
+        q.folder_id.map(FolderId),
+        q.unclassified,
+    )
+    .await?;
     Ok(Json(articles))
 }
 

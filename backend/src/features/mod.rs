@@ -1,6 +1,7 @@
 pub mod articles;
 pub mod feed_overview;
 pub mod feeds;
+pub mod folders;
 pub mod health;
 pub mod stats;
 
@@ -21,6 +22,7 @@ pub fn router(state: AppState) -> Router {
         .merge(articles::routes())
         .merge(stats::routes())
         .merge(feed_overview::routes())
+        .merge(folders::routes())
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive()) // tighten before exposing beyond your LAN
         .with_state(state)

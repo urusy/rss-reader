@@ -5,13 +5,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::domain::{Feed, FeedId};
-use crate::shared::error::AppResult;
+use crate::features::folders::domain::FolderId;
+use crate::shared::error::{AppError, AppResult};
 
 pub async fn insert(pool: &PgPool, url: &str) -> AppResult<Feed> {
     let row = sqlx::query_as::<_, Feed>(
         r#"INSERT INTO feeds (id, url) VALUES ($1, $2)
            ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
-           RETURNING id, url, title, created_at, last_fetched_at"#,
+           RETURNING id, url, title, folder_id, created_at, last_fetched_at"#,
     )
     .bind(Uuid::new_v4())
     .bind(url)
@@ -22,7 +23,7 @@ pub async fn insert(pool: &PgPool, url: &str) -> AppResult<Feed> {
 
 pub async fn list_all(pool: &PgPool) -> AppResult<Vec<Feed>> {
     let rows = sqlx::query_as::<_, Feed>(
-        r#"SELECT id, url, title, created_at, last_fetched_at
+        r#"SELECT id, url, title, folder_id, created_at, last_fetched_at
            FROM feeds ORDER BY created_at DESC"#,
     )
     .fetch_all(pool)
@@ -50,4 +51,41 @@ pub async fn touch_fetched(pool: &PgPool, id: FeedId, title: Option<&str>) -> Ap
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// PATCH: title / folder_id をそれぞれ「触る/触らない」で部分更新する。
+/// folder_id の三値: 外側 None=未指定(据え置き) / Some(None)=未分類化(NULL) / Some(Some(x))=割当。
+pub async fn update(
+    pool: &PgPool,
+    id: FeedId,
+    title: Option<&str>,
+    folder_id: Option<Option<FolderId>>,
+) -> AppResult<Feed> {
+    let touch_folder = folder_id.is_some();
+    let folder_val: Option<Uuid> = folder_id.flatten().map(|f| f.0);
+    sqlx::query_as::<_, Feed>(
+        r#"UPDATE feeds
+           SET title     = CASE WHEN $2 THEN $3 ELSE title     END,
+               folder_id = CASE WHEN $4 THEN $5 ELSE folder_id END
+           WHERE id = $1
+           RETURNING id, url, title, folder_id, created_at, last_fetched_at"#,
+    )
+    .bind(id.0) // $1 :: uuid（WHERE id = $1）
+    .bind(title.is_some()) // $2 :: bool
+    .bind(title) // $3 :: text（CASE 結果型が title 列=TEXT から解決）
+    .bind(touch_folder) // $4 :: bool
+    .bind(folder_val) // $5 :: uuid（CASE 結果型が folder_id 列=UUID から解決）
+    .fetch_optional(pool)
+    .await?
+    .ok_or(AppError::NotFound)
+}
+
+/// 割当先フォルダの存在チェック（advisory）。FK が本命のガードで、
+/// これは 23503(FK 違反=500) を Validation(400) に整形するためだけのもの。
+pub async fn folder_exists(pool: &PgPool, id: FolderId) -> AppResult<bool> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM folders WHERE id = $1)")
+        .bind(id.0)
+        .fetch_one(pool)
+        .await?;
+    Ok(exists)
 }

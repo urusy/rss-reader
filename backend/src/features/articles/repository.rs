@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use super::domain::{Article, ArticleId};
 use crate::features::feeds::domain::FeedId;
+use crate::features::folders::domain::FolderId;
 use crate::shared::error::{AppError, AppResult};
 
 #[allow(clippy::too_many_arguments)]
@@ -37,16 +38,24 @@ pub async fn list(
     pool: &PgPool,
     feed_id: Option<FeedId>,
     unread_only: bool,
+    folder_id: Option<FolderId>,
+    unclassified: bool,
 ) -> AppResult<Vec<Article>> {
     let rows = sqlx::query_as::<_, Article>(
         r#"SELECT * FROM articles
            WHERE ($1::uuid IS NULL OR feed_id = $1)
              AND ($2 = false OR is_read = false)
+             AND ($3::uuid IS NULL
+                  OR feed_id IN (SELECT id FROM feeds WHERE folder_id = $3))
+             AND ($4 = false
+                  OR feed_id IN (SELECT id FROM feeds WHERE folder_id IS NULL))
            ORDER BY published_at DESC NULLS LAST, created_at DESC
            LIMIT 200"#,
     )
     .bind(feed_id.map(|f| f.0))
     .bind(unread_only)
+    .bind(folder_id.map(|f| f.0))
+    .bind(unclassified)
     .fetch_all(pool)
     .await?;
     Ok(rows)
@@ -72,7 +81,12 @@ pub async fn set_read(pool: &PgPool, id: ArticleId, read: bool) -> AppResult<()>
     Ok(())
 }
 
-pub async fn save_summary(pool: &PgPool, id: ArticleId, summary: &str, lang: &str) -> AppResult<()> {
+pub async fn save_summary(
+    pool: &PgPool,
+    id: ArticleId,
+    summary: &str,
+    lang: &str,
+) -> AppResult<()> {
     sqlx::query(
         r#"UPDATE articles
            SET summary = $2, summary_lang = $3, processed_at = now()

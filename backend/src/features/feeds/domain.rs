@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::features::folders::domain::FolderId;
+
 /// Newtype for a feed's primary key. Prevents mixing it up with ArticleId etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
@@ -32,6 +34,7 @@ pub struct Feed {
     pub id: FeedId,
     pub url: String,
     pub title: Option<String>,
+    pub folder_id: Option<FolderId>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_fetched_at: Option<chrono::DateTime<chrono::Utc>>,
 }

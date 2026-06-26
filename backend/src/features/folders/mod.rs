@@ -1,0 +1,18 @@
+pub mod domain;
+pub mod handler;
+pub mod repository;
+pub mod service;
+
+use axum::routing::get;
+use axum::Router;
+
+use crate::shared::state::AppState;
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/folders", get(handler::list).post(handler::create))
+        .route(
+            "/api/folders/{id}",
+            axum::routing::patch(handler::update).delete(handler::delete),
+        )
+}

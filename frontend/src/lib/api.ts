@@ -4,8 +4,16 @@ export interface Feed {
   id: string;
   url: string;
   title: string | null;
+  folder_id: string | null;
   created_at: string;
   last_fetched_at: string | null;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  position: number;
+  created_at: string;
 }
 
 export interface Article {
@@ -53,9 +61,34 @@ export const api = {
   deleteFeed: (id: string) => http<void>(`/api/feeds/${id}`, { method: "DELETE" }),
   listFeedOverview: () => http<FeedOverview[]>("/api/feeds/overview"),
 
-  listArticles: (params?: { feed_id?: string; unread?: boolean }) => {
+  /**
+   * フィードの部分更新（リネーム / フォルダ割当 / 未分類化）。
+   * double-option セマンティクス:
+   *   - キーを渡さない       => その項目は据え置き
+   *   - folder_id: "<uuid>" => そのフォルダへ割当
+   *   - folder_id: null     => 未分類化（割当解除）
+   * 解除は必ず `null` を渡す（undefined はキーが出ず据え置きになる）。
+   */
+  updateFeed: (id: string, patch: { title?: string; folder_id?: string | null }) =>
+    http<Feed>(`/api/feeds/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  listFolders: () => http<Folder[]>("/api/folders"),
+  createFolder: (name: string) =>
+    http<Folder>("/api/folders", { method: "POST", body: JSON.stringify({ name }) }),
+  updateFolder: (id: string, name: string) =>
+    http<Folder>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteFolder: (id: string) => http<void>(`/api/folders/${id}`, { method: "DELETE" }),
+
+  listArticles: (params?: {
+    feed_id?: string;
+    folder_id?: string;
+    unclassified?: boolean;
+    unread?: boolean;
+  }) => {
     const q = new URLSearchParams();
     if (params?.feed_id) q.set("feed_id", params.feed_id);
+    if (params?.folder_id) q.set("folder_id", params.folder_id);
+    if (params?.unclassified) q.set("unclassified", "true");
     if (params?.unread) q.set("unread", "true");
     const qs = q.toString();
     return http<Article[]>(`/api/articles${qs ? `?${qs}` : ""}`);
