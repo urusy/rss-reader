@@ -2,6 +2,7 @@ import { createResource, createSignal, For, Show } from "solid-js";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import FeedStatsList from "@/components/feed/FeedStatsList";
 
 export default function FeedList() {
   const [articles, { refetch }] = createResource(() => api.listArticles());
@@ -37,6 +38,12 @@ export default function FeedList() {
           {busy() ? "追加中…" : "フィード追加"}
         </Button>
       </div>
+
+      {/* 機能03: フィード別の最終投稿/投稿頻度。機能01の /manage 着地後に移設する暫定マウント。 */}
+      <section class="rounded-lg border border-border p-4">
+        <h2 class="text-sm font-semibold mb-2">フィード統計</h2>
+        <FeedStatsList />
+      </section>
 
       <Show
         when={!articles.loading}

@@ -24,6 +24,14 @@ export interface Article {
   created_at: string;
 }
 
+export interface FeedOverview {
+  feed_id: string;
+  total_count: number;
+  unread_count: number;
+  last_published_at: string | null;
+  posts_per_week: number;
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -43,6 +51,7 @@ export const api = {
   addFeed: (url: string) =>
     http<Feed>("/api/feeds", { method: "POST", body: JSON.stringify({ url }) }),
   deleteFeed: (id: string) => http<void>(`/api/feeds/${id}`, { method: "DELETE" }),
+  listFeedOverview: () => http<FeedOverview[]>("/api/feeds/overview"),
 
   listArticles: (params?: { feed_id?: string; unread?: boolean }) => {
     const q = new URLSearchParams();
