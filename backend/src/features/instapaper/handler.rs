@@ -1,11 +1,12 @@
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::domain::{InstapaperCredentials, InstapaperStatus};
+use super::domain::{InstapaperCredentials, InstapaperStatus, ReadLaterItem};
 use super::service;
+use crate::features::articles::domain::ArticleId;
 use crate::shared::error::{AppError, AppResult};
 use crate::shared::state::AppState;
 
@@ -39,10 +40,24 @@ pub struct ReadLaterBody {
     pub article_id: Uuid,
 }
 
-pub async fn add_read_later(
+pub async fn save_for_later(
     State(state): State<AppState>,
     Json(body): Json<ReadLaterBody>,
-) -> AppResult<StatusCode> {
-    service::add_to_read_later(&state, body.article_id).await?;
-    Ok(StatusCode::NO_CONTENT)
+) -> AppResult<Json<ReadLaterItem>> {
+    let item = service::save_for_later(&state, ArticleId(body.article_id)).await?;
+    Ok(Json(item))
+}
+
+pub async fn get_read_later_one(
+    State(state): State<AppState>,
+    Path(article_id): Path<Uuid>,
+) -> AppResult<Json<ReadLaterItem>> {
+    service::get_read_later(&state, ArticleId(article_id))
+        .await?
+        .map(Json)
+        .ok_or(AppError::NotFound)
+}
+
+pub async fn list_read_later(State(state): State<AppState>) -> AppResult<Json<Vec<ReadLaterItem>>> {
+    Ok(Json(service::list_read_later(&state).await?))
 }

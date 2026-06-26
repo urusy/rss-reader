@@ -27,8 +27,8 @@ want "GET status -> 200" 200
 echo "$body" | jq -e '.configured == false' >/dev/null
 if [ $? = 0 ]; then echo "PASS: status configured==false"; pass=$((pass+1)); else echo "FAIL: status configured!=false (body: $body)"; fail=$((fail+1)); fi
 
-# read-later with no credentials -> 503 NotEnabled (gate checked before article lookup)
+# read-later for a nonexistent article -> 404 (機能06: 記事存在を資格情報ゲートより先に確認)
 req POST /api/read-later '{"article_id":"00000000-0000-0000-0000-000000000000"}'
-want "read-later without credentials -> 503" 503
+want "read-later nonexistent article -> 404" 404
 
 echo "----"; echo "PASS=$pass FAIL=$fail"; [ "$fail" -eq 0 ]

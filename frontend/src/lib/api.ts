@@ -50,6 +50,22 @@ export interface InstapaperStatus {
   configured: boolean;
 }
 
+export interface ReadLaterItem {
+  article_id: string;
+  status: "pending" | "added" | "failed";
+  instapaper_added_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// http<T> は Error(`${status} ${statusText}: ${body}`) を投げる。先頭の status を取り出す。
+export function errorStatus(e: unknown): number | null {
+  const msg = e instanceof Error ? e.message : String(e);
+  const m = /^(\d{3})\b/.exec(msg);
+  return m ? Number(m[1]) : null;
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -125,12 +141,22 @@ export const api = {
     }),
   deleteInstapaperCredentials: () =>
     http<void>("/api/instapaper/credentials", { method: "DELETE" }),
-  // 05 が所有する POST /api/read-later の呼び口。記事 id を取る（生 URL は取らない）。
-  saveToReadLater: (articleId: string) =>
-    http<void>("/api/read-later", {
+  // 記事を Instapaper に保存し、保存状態を返す（冪等）。
+  saveForLater: (articleId: string) =>
+    http<ReadLaterItem>("/api/read-later", {
       method: "POST",
       body: JSON.stringify({ article_id: articleId }),
     }),
+  // 404 のみ「未保存」を意味するので null に畳む。それ以外は再 throw（500等を未保存と誤表示しない）。
+  getReadLater: async (articleId: string): Promise<ReadLaterItem | null> => {
+    try {
+      return await http<ReadLaterItem>(`/api/read-later/${articleId}`);
+    } catch (e) {
+      if (errorStatus(e) === 404) return null;
+      throw e;
+    }
+  },
+  listReadLater: () => http<ReadLaterItem[]>("/api/read-later"),
   summarize: (id: string, lang = "ja") =>
     http<Article>(`/api/articles/${id}/summarize`, {
       method: "POST",

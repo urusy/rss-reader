@@ -1,12 +1,42 @@
 import { createEffect, createResource, createSignal, Show } from "solid-js";
 import { useParams } from "@solidjs/router";
-import { api, type Article } from "@/lib/api";
+import { api, errorStatus, type Article } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function ArticleView() {
   const params = useParams();
   const [article, { mutate }] = createResource(() => params.id, api.getArticle);
   const [busy, setBusy] = createSignal<"summarize" | "translate" | null>(null);
+
+  // 後で読む（Instapaper）の保存状態。null = 未保存。
+  const [later, { mutate: mutateLater }] = createResource(
+    () => params.id,
+    api.getReadLater,
+  );
+  const [savingLater, setSavingLater] = createSignal(false);
+
+  const saveLater = async () => {
+    const id = params.id;
+    if (!id) return;
+    setSavingLater(true);
+    try {
+      mutateLater(await api.saveForLater(id));
+    } catch (e) {
+      if (errorStatus(e) === 503) {
+        alert("Instapaper が未設定です。設定画面で資格情報を登録してください。");
+      } else {
+        // 502 等: サーバは failed 行を残すので再取得して反映
+        try {
+          mutateLater(await api.getReadLater(id));
+        } catch {
+          /* ignore */
+        }
+        alert(`保存に失敗しました: ${String(e)}`);
+      }
+    } finally {
+      setSavingLater(false);
+    }
+  };
 
   // 記事ロード完了かつ未読なら一度だけ既読化する。lastMarkedId は意図的に非リアクティブ
   // （signal にすると createEffect の依存に入り二重 POST を招く）。
@@ -70,7 +100,25 @@ export default function ArticleView() {
             >
               {busy() === "translate" ? "翻訳中…" : "翻訳 (Claude)"}
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={saveLater}
+              disabled={savingLater() || later()?.status === "added"}
+            >
+              {savingLater()
+                ? "保存中…"
+                : later()?.status === "added"
+                  ? "保存済み ✓"
+                  : later()?.status === "failed"
+                    ? "再試行"
+                    : "後で読む"}
+            </Button>
           </div>
+
+          <Show when={later()?.status === "failed" && later()?.last_error}>
+            <p class="text-xs text-muted-foreground">保存に失敗: {later()?.last_error}</p>
+          </Show>
 
           <Show when={a().summary}>
             <section class="rounded-lg border border-border bg-muted/40 p-4">

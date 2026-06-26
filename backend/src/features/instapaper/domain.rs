@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::features::articles::domain::ArticleId;
+
 /// 検証済みの資格情報入力。空文字は構築時に弾く（不正状態を表現不能にする）。
 /// password を持つので Serialize は付けない（クライアントに漏らさない）。
 #[derive(Debug, Clone)]
@@ -93,6 +95,29 @@ pub fn classify_auth_status(code: u16) -> AuthOutcome {
     }
 }
 
+// ---- 機能06「後で読む」: read_later_items のドメイン ----
+
+/// read_later_items 1 行をミラーする。status は DB の CHECK 制約で 3 値に限定される。
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct ReadLaterItem {
+    pub article_id: ArticleId,
+    pub status: String, // "pending" | "added" | "failed"
+    pub instapaper_added_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_error: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// 保存状態の文字列を 1 箇所に固定（マイグレーション 0004 の CHECK 制約と一致させる）。
+/// PENDING/FAILED は SQL リテラルとして書き込み、Rust 側の分岐で参照するのは ADDED のみ。
+/// 残り2つは CHECK 制約との一致を担保するドキュメント兼テスト基準なので allow(dead_code)。
+#[allow(dead_code)]
+pub mod read_later_status {
+    pub const PENDING: &str = "pending";
+    pub const ADDED: &str = "added";
+    pub const FAILED: &str = "failed";
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +190,13 @@ mod tests {
         assert_eq!(classify_auth_status(200), AuthOutcome::Valid);
         assert_eq!(classify_auth_status(403), AuthOutcome::Invalid);
         assert_eq!(classify_auth_status(500), AuthOutcome::Failed);
+    }
+
+    #[test]
+    fn status_constants_match_db_check() {
+        // マイグレーション 0004 の CHECK (status IN ('pending','added','failed')) と一致。
+        assert_eq!(read_later_status::PENDING, "pending");
+        assert_eq!(read_later_status::ADDED, "added");
+        assert_eq!(read_later_status::FAILED, "failed");
     }
 }

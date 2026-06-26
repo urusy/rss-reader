@@ -1,7 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::domain::StoredCredentials;
+use super::domain::{ReadLaterItem, StoredCredentials};
+use crate::features::articles::domain::ArticleId;
 use crate::shared::error::AppResult;
 
 /// 記事 URL/タイトル取得用の読み取り射影。
@@ -52,6 +53,67 @@ pub async fn get_article_ref(pool: &PgPool, article_id: Uuid) -> AppResult<Optio
         .fetch_optional(pool)
         .await?;
     Ok(row)
+}
+
+// ---- 機能06「後で読む」: read_later_items ----
+
+/// pending として 1 行を確保（既存行があっても pending に戻し last_error をクリア。PK で冪等）。
+pub async fn upsert_pending(pool: &PgPool, id: ArticleId) -> AppResult<()> {
+    sqlx::query(
+        r#"INSERT INTO read_later_items (article_id, status, updated_at)
+           VALUES ($1, 'pending', now())
+           ON CONFLICT (article_id) DO UPDATE
+             SET status = 'pending', last_error = NULL, updated_at = now()"#,
+    )
+    .bind(id.0)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn mark_added(pool: &PgPool, id: ArticleId) -> AppResult<ReadLaterItem> {
+    let item = sqlx::query_as::<_, ReadLaterItem>(
+        r#"UPDATE read_later_items
+           SET status = 'added', instapaper_added_at = now(), last_error = NULL, updated_at = now()
+           WHERE article_id = $1
+           RETURNING *"#,
+    )
+    .bind(id.0)
+    .fetch_one(pool)
+    .await?;
+    Ok(item)
+}
+
+pub async fn mark_failed(pool: &PgPool, id: ArticleId, err: &str) -> AppResult<ReadLaterItem> {
+    let item = sqlx::query_as::<_, ReadLaterItem>(
+        r#"UPDATE read_later_items
+           SET status = 'failed', last_error = $2, updated_at = now()
+           WHERE article_id = $1
+           RETURNING *"#,
+    )
+    .bind(id.0)
+    .bind(err)
+    .fetch_one(pool)
+    .await?;
+    Ok(item)
+}
+
+pub async fn get_item(pool: &PgPool, id: ArticleId) -> AppResult<Option<ReadLaterItem>> {
+    let row =
+        sqlx::query_as::<_, ReadLaterItem>("SELECT * FROM read_later_items WHERE article_id = $1")
+            .bind(id.0)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row)
+}
+
+pub async fn list_items(pool: &PgPool) -> AppResult<Vec<ReadLaterItem>> {
+    let rows = sqlx::query_as::<_, ReadLaterItem>(
+        "SELECT * FROM read_later_items ORDER BY updated_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
 }
 
 #[cfg(test)]
