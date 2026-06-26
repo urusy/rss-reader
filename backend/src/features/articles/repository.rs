@@ -61,6 +61,22 @@ pub async fn list(
     Ok(rows)
 }
 
+/// is_read=false の記事を一括で既読にする。
+/// feed_id=None なら全フィード、Some(id) ならそのフィードのみ。
+/// 既に既読の行は対象外なので、戻り値（rows_affected）= 今回新たに既読化した件数。
+pub async fn mark_all_read(pool: &PgPool, feed_id: Option<FeedId>) -> AppResult<u64> {
+    let res = sqlx::query(
+        r#"UPDATE articles
+           SET is_read = true
+           WHERE is_read = false
+             AND ($1::uuid IS NULL OR feed_id = $1)"#,
+    )
+    .bind(feed_id.map(|f| f.0))
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
+}
+
 pub async fn get(pool: &PgPool, id: ArticleId) -> AppResult<Article> {
     sqlx::query_as::<_, Article>("SELECT * FROM articles WHERE id = $1")
         .bind(id.0)

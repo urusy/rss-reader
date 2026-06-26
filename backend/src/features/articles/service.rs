@@ -29,6 +29,10 @@ pub async fn mark_read(state: &AppState, id: ArticleId, read: bool) -> AppResult
     repository::set_read(&state.db, id, read).await
 }
 
+pub async fn mark_all_read(state: &AppState, feed_id: Option<FeedId>) -> AppResult<u64> {
+    repository::mark_all_read(&state.db, feed_id).await
+}
+
 /// Build an Anthropic client from config, or fail with a clear "not enabled"
 /// error if no API key is set yet.
 fn llm_client(state: &AppState) -> AppResult<AnthropicClient> {

@@ -2,12 +2,27 @@ import { createResource, createSignal, For, Show } from "solid-js";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import FeedStatsList from "@/components/feed/FeedStatsList";
 
 export default function FeedList() {
   const [articles, { refetch }] = createResource(() => api.listArticles());
+  const [stats, { refetch: refetchStats }] = createResource(() => api.getStats());
   const [url, setUrl] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [marking, setMarking] = createSignal(false);
+
+  const markAll = async () => {
+    setMarking(true);
+    try {
+      await api.markAllRead();
+      await Promise.all([refetch(), refetchStats()]);
+    } catch (e) {
+      alert(`既読化に失敗しました: ${String(e)}`);
+    } finally {
+      setMarking(false);
+    }
+  };
 
   const addFeed = async () => {
     const value = url().trim();
@@ -26,6 +41,20 @@ export default function FeedList() {
 
   return (
     <div class="space-y-6">
+      <div class="flex items-center justify-between gap-2">
+        <Badge variant={(stats()?.unread ?? 0) > 0 ? "unread" : "default"}>
+          未読 {stats()?.unread ?? 0} 件
+        </Badge>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={markAll}
+          disabled={marking() || (stats()?.unread ?? 0) === 0}
+        >
+          {marking() ? "既読化中…" : "すべて既読"}
+        </Button>
+      </div>
+
       <div class="flex gap-2">
         <input
           class="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

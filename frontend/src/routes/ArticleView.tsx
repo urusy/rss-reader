@@ -1,4 +1,4 @@
-import { createResource, createSignal, Show } from "solid-js";
+import { createEffect, createResource, createSignal, Show } from "solid-js";
 import { useParams } from "@solidjs/router";
 import { api, type Article } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,20 @@ export default function ArticleView() {
   const params = useParams();
   const [article, { mutate }] = createResource(() => params.id, api.getArticle);
   const [busy, setBusy] = createSignal<"summarize" | "translate" | null>(null);
+
+  // 記事ロード完了かつ未読なら一度だけ既読化する。lastMarkedId は意図的に非リアクティブ
+  // （signal にすると createEffect の依存に入り二重 POST を招く）。
+  let lastMarkedId: string | undefined;
+  createEffect(() => {
+    const a = article();
+    if (a && !a.is_read && lastMarkedId !== a.id) {
+      lastMarkedId = a.id;
+      api
+        .markRead(a.id, true)
+        .then(() => mutate((prev) => (prev ? { ...prev, is_read: true } : prev)))
+        .catch((e) => console.error("auto mark-read failed", e));
+    }
+  });
 
   const run = async (kind: "summarize" | "translate") => {
     const id = params.id;

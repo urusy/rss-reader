@@ -40,6 +40,12 @@ export interface FeedOverview {
   posts_per_week: number;
 }
 
+export interface Stats {
+  feeds: number;
+  articles: number;
+  unread: number;
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -99,6 +105,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ read }),
     }),
+  // 一括既読。feed_id 省略 = 全体。送信先は /api/articles/read-all（mark-read ではない）。
+  markAllRead: (params?: { feed_id?: string }) =>
+    http<void>("/api/articles/read-all", {
+      method: "POST",
+      body: JSON.stringify({ feed_id: params?.feed_id ?? null }),
+    }),
+  getStats: () => http<Stats>("/api/stats"),
   summarize: (id: string, lang = "ja") =>
     http<Article>(`/api/articles/${id}/summarize`, {
       method: "POST",
