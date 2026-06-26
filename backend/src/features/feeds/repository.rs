@@ -21,6 +21,17 @@ pub async fn insert(pool: &PgPool, url: &str) -> AppResult<Feed> {
     Ok(row)
 }
 
+pub async fn get(pool: &PgPool, id: FeedId) -> AppResult<Feed> {
+    sqlx::query_as::<_, Feed>(
+        r#"SELECT id, url, title, folder_id, created_at, last_fetched_at
+           FROM feeds WHERE id = $1"#,
+    )
+    .bind(id.0)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(AppError::NotFound)
+}
+
 pub async fn list_all(pool: &PgPool) -> AppResult<Vec<Feed>> {
     let rows = sqlx::query_as::<_, Feed>(
         r#"SELECT id, url, title, folder_id, created_at, last_fetched_at

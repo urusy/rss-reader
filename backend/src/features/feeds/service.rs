@@ -51,6 +51,13 @@ pub async fn update_feed(
     repository::update(&state.db, id, title.as_deref(), folder_id).await
 }
 
+/// 単一フィードのみ再取得（従来の全件 refresh ではなく当該フィードだけ）。
+pub async fn refresh_one(state: &AppState, id: FeedId) -> AppResult<Feed> {
+    let feed = repository::get(&state.db, id).await?; // 無ければ NotFound
+    fetch_and_store(state, &feed).await?; // 既存ロジックを再利用
+    repository::get(&state.db, id).await // 更新後（last_fetched_at 反映）を返す
+}
+
 pub async fn refresh_all_feeds(state: &AppState) -> AppResult<()> {
     let feeds = repository::list_all(&state.db).await?;
     tracing::info!(count = feeds.len(), "refreshing feeds");

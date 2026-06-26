@@ -97,6 +97,9 @@ export const api = {
    */
   updateFeed: (id: string, patch: { title?: string; folder_id?: string | null }) =>
     http<Feed>(`/api/feeds/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  // 当該フィードのみ再取得し、更新後 Feed を返す。
+  refreshFeed: (id: string) =>
+    http<Feed>(`/api/feeds/${id}/refresh`, { method: "POST" }),
 
   listFolders: () => http<Folder[]>("/api/folders"),
   createFolder: (name: string) =>

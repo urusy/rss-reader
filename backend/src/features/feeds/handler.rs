@@ -32,13 +32,9 @@ pub async fn delete(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppR
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn refresh(
-    State(state): State<AppState>,
-    Path(_id): Path<Uuid>,
-) -> AppResult<StatusCode> {
-    // Simple version refreshes everything; per-feed refresh is a future refinement.
-    service::refresh_all_feeds(&state).await?;
-    Ok(StatusCode::ACCEPTED)
+pub async fn refresh(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Json<Feed>> {
+    // 当該フィードのみ再取得し、更新後の Feed を返す。
+    Ok(Json(service::refresh_one(&state, FeedId(id)).await?))
 }
 
 #[derive(Debug, Deserialize)]
