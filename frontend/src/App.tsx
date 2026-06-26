@@ -1,4 +1,5 @@
 import type { ParentComponent } from "solid-js";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 /** App shell: header + routed content. Kept deliberately minimal. */
 const App: ParentComponent = (props) => {
@@ -9,7 +10,10 @@ const App: ParentComponent = (props) => {
           <a href="/" class="text-lg font-semibold tracking-tight">
             RSS Reader
           </a>
-          <span class="text-sm text-muted-foreground">self-hosted</span>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-muted-foreground">self-hosted</span>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main class="mx-auto max-w-3xl px-4 py-6">{props.children}</main>
