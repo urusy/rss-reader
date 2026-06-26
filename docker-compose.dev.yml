@@ -1,0 +1,7 @@
+# Local dev override: publishes the DB port so a host-run backend (just back)
+# reaches Postgres at localhost:${DB_PORT:-5432}.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+services:
+  db:
+    ports:
+      - "${DB_PORT:-5432}:5432"

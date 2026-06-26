@@ -17,7 +17,7 @@ _pnpm-version:
 
 # Start only the database (for local cargo run / pnpm dev).
 dev-db:
-    docker compose up -d db
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 
 # Run the backend with auto-reload (needs: cargo install cargo-watch).
 back:
