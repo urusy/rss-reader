@@ -36,16 +36,28 @@ export const Dialog = ArkDialog.Root;
 export const DialogTrigger = ArkDialog.Trigger;
 export const DialogCloseTrigger = ArkDialog.CloseTrigger;
 
-/** Backdrop + centered, bordered content panel, rendered in a Portal. */
-export function DialogContent(props: ComponentProps<typeof ArkDialog.Content>) {
-  const [local, rest] = splitProps(props, ["class", "children"]);
+/** Backdrop + content panel, rendered in a Portal. side="left" = full-height drawer. */
+export function DialogContent(
+  props: ComponentProps<typeof ArkDialog.Content> & { side?: "center" | "left" },
+) {
+  const [local, rest] = splitProps(props, ["class", "children", "side"]);
+  const side = () => local.side ?? "center";
   return (
     <Portal>
       <ArkDialog.Backdrop class="fixed inset-0 z-50 bg-black/50" />
-      <ArkDialog.Positioner class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <ArkDialog.Positioner
+        class={cn(
+          "fixed inset-0 z-50 flex",
+          side() === "left"
+            ? "items-stretch justify-start"
+            : "items-center justify-center p-4",
+        )}
+      >
         <ArkDialog.Content
           class={cn(
-            "w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg",
+            side() === "left"
+              ? "h-full w-72 max-w-[85%] overflow-y-auto rounded-none border-r border-border bg-background p-4 shadow-lg"
+              : "w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg",
             local.class,
           )}
           {...rest}
