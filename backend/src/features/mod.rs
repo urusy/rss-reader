@@ -1,6 +1,7 @@
 pub mod articles;
 pub mod feeds;
 pub mod health;
+pub mod stats;
 
 use axum::Router;
 use tower_http::cors::CorsLayer;
@@ -17,6 +18,7 @@ pub fn router(state: AppState) -> Router {
         .merge(health::routes())
         .merge(feeds::routes())
         .merge(articles::routes())
+        .merge(stats::routes())
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive()) // tighten before exposing beyond your LAN
         .with_state(state)
