@@ -9,8 +9,9 @@
     <script>
       (function () {
         try {
+          var valid = ["light", "dark", "graphite", "sepia"];
           var t = localStorage.getItem("theme");
-          if (t !== "light" && t !== "dark") {
+          if (valid.indexOf(t) === -1) {
             t =
               window.matchMedia &&
               window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -18,8 +19,8 @@
                 : "light";
           }
           var el = document.documentElement;
-          if (t === "dark") el.classList.add("dark");
-          el.style.colorScheme = t;
+          if (t !== "light") el.classList.add(t);
+          el.style.colorScheme = t === "dark" || t === "graphite" ? "dark" : "light";
         } catch (e) {}
       })();
     </script>

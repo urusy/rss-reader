@@ -1,8 +1,8 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Enable class-based dark mode: add `class="dark"` on <html>. */
-@custom-variant dark (&:is(.dark *));
+/* Enable class-based dark mode. Dark-ish themes (dark, graphite) get `dark:` utils. */
+@custom-variant dark (&:is(.dark *, .graphite *));
 
 /* shadcn-solid compatible design tokens. Neutral, high-contrast, minimal. */
 :root {
@@ -42,6 +42,46 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+}
+
+/* Graphite: a softer, slightly cool dark gray (lighter than the near-black dark). */
+.graphite {
+  --background: oklch(0.225 0.005 250);
+  --foreground: oklch(0.92 0 0);
+  --card: oklch(0.265 0.005 250);
+  --card-foreground: oklch(0.92 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.265 0.005 250);
+  --secondary: oklch(0.305 0.005 250);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.305 0.005 250);
+  --muted-foreground: oklch(0.7 0.005 250);
+  --accent: oklch(0.33 0.006 250);
+  --accent-foreground: oklch(0.92 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.6 0.01 250);
+}
+
+/* Sepia: warm paper-like light theme with dark brown ink. */
+.sepia {
+  --background: oklch(0.94 0.018 83);
+  --foreground: oklch(0.32 0.03 60);
+  --card: oklch(0.96 0.015 83);
+  --card-foreground: oklch(0.32 0.03 60);
+  --primary: oklch(0.4 0.05 55);
+  --primary-foreground: oklch(0.96 0.015 85);
+  --secondary: oklch(0.9 0.025 80);
+  --secondary-foreground: oklch(0.32 0.03 60);
+  --muted: oklch(0.9 0.025 80);
+  --muted-foreground: oklch(0.5 0.03 62);
+  --accent: oklch(0.88 0.035 75);
+  --accent-foreground: oklch(0.3 0.03 60);
+  --destructive: oklch(0.55 0.2 27);
+  --border: oklch(0.85 0.03 75);
+  --input: oklch(0.85 0.03 75);
+  --ring: oklch(0.55 0.04 65);
 }
 
 /* Map tokens to Tailwind theme so `bg-background`, `text-muted-foreground` work. */
