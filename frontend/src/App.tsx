@@ -1,20 +1,21 @@
 import type { ParentComponent } from "solid-js";
+import { AppProvider } from "@/lib/store";
+import Sidebar from "@/components/layout/Sidebar";
+import MobileTopBar from "@/components/layout/MobileTopBar";
 
-/** App shell: header + routed content. Kept deliberately minimal. */
-const App: ParentComponent = (props) => {
-  return (
-    <div class="min-h-screen bg-background text-foreground">
-      <header class="border-b border-border">
-        <div class="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between">
-          <a href="/" class="text-lg font-semibold tracking-tight">
-            RSS Reader
-          </a>
-          <span class="text-sm text-muted-foreground">self-hosted</span>
-        </div>
-      </header>
-      <main class="mx-auto max-w-3xl px-4 py-6">{props.children}</main>
+/** 二ペインのアプリシェル。左 Sidebar（永続）+ 右ペイン（一覧 or 本文）。 */
+const App: ParentComponent = (props) => (
+  <AppProvider>
+    <div class="min-h-screen bg-background text-foreground md:grid md:grid-cols-[280px_1fr]">
+      <Sidebar />
+      <div class="flex min-h-screen min-w-0 flex-col">
+        <MobileTopBar />
+        <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
+          {props.children}
+        </main>
+      </div>
     </div>
-  );
-};
+  </AppProvider>
+);
 
 export default App;

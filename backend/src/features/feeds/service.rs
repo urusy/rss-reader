@@ -5,6 +5,7 @@ use feed_rs::parser;
 use super::domain::{Feed, FeedId, FeedUrl};
 use super::repository;
 use crate::features::articles;
+use crate::features::folders::domain::FolderId;
 use crate::shared::error::{AppError, AppResult};
 use crate::shared::state::AppState;
 
@@ -28,6 +29,33 @@ pub async fn delete_feed(state: &AppState, id: FeedId) -> AppResult<()> {
         return Err(AppError::NotFound);
     }
     Ok(())
+}
+
+pub async fn update_feed(
+    state: &AppState,
+    id: FeedId,
+    title: Option<String>,
+    folder_id: Option<Option<FolderId>>,
+) -> AppResult<Feed> {
+    if let Some(t) = &title {
+        if t.trim().is_empty() {
+            return Err(AppError::Validation("title must not be empty".into()));
+        }
+    }
+    // 実在しないフォルダへの割当は 400 に整形（FK 違反の 500 を避ける advisory）。
+    if let Some(Some(fid)) = folder_id {
+        if !repository::folder_exists(&state.db, fid).await? {
+            return Err(AppError::Validation("folder not found".into()));
+        }
+    }
+    repository::update(&state.db, id, title.as_deref(), folder_id).await
+}
+
+/// 単一フィードのみ再取得（従来の全件 refresh ではなく当該フィードだけ）。
+pub async fn refresh_one(state: &AppState, id: FeedId) -> AppResult<Feed> {
+    let feed = repository::get(&state.db, id).await?; // 無ければ NotFound
+    fetch_and_store(state, &feed).await?; // 既存ロジックを再利用
+    repository::get(&state.db, id).await // 更新後（last_fetched_at 反映）を返す
 }
 
 pub async fn refresh_all_feeds(state: &AppState) -> AppResult<()> {
@@ -55,8 +83,8 @@ pub async fn fetch_and_store(state: &AppState, feed: &Feed) -> AppResult<()> {
         .await
         .map_err(|e| AppError::Upstream(e.to_string()))?;
 
-    let parsed = parser::parse(&bytes[..])
-        .map_err(|e| AppError::Upstream(format!("parse error: {e}")))?;
+    let parsed =
+        parser::parse(&bytes[..]).map_err(|e| AppError::Upstream(format!("parse error: {e}")))?;
 
     let feed_title = parsed.title.as_ref().map(|t| t.content.clone());
 

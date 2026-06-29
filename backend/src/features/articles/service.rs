@@ -5,6 +5,7 @@
 use super::domain::{Article, ArticleId};
 use super::repository;
 use crate::features::feeds::domain::FeedId;
+use crate::features::folders::domain::FolderId;
 use crate::shared::error::{AppError, AppResult};
 use crate::shared::llm::anthropic::AnthropicClient;
 use crate::shared::llm::{LlmClient, SummarizeRequest, TranslateRequest};
@@ -14,8 +15,10 @@ pub async fn list_articles(
     state: &AppState,
     feed_id: Option<FeedId>,
     unread_only: bool,
+    folder_id: Option<FolderId>,
+    unclassified: bool,
 ) -> AppResult<Vec<Article>> {
-    repository::list(&state.db, feed_id, unread_only).await
+    repository::list(&state.db, feed_id, unread_only, folder_id, unclassified).await
 }
 
 pub async fn get_article(state: &AppState, id: ArticleId) -> AppResult<Article> {
@@ -24,6 +27,10 @@ pub async fn get_article(state: &AppState, id: ArticleId) -> AppResult<Article> 
 
 pub async fn mark_read(state: &AppState, id: ArticleId, read: bool) -> AppResult<()> {
     repository::set_read(&state.db, id, read).await
+}
+
+pub async fn mark_all_read(state: &AppState, feed_id: Option<FeedId>) -> AppResult<u64> {
+    repository::mark_all_read(&state.db, feed_id).await
 }
 
 /// Build an Anthropic client from config, or fail with a clear "not enabled"

@@ -11,6 +11,7 @@ use crate::shared::state::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/articles", get(handler::list))
+        .route("/api/articles/read-all", post(handler::mark_all_read))
         .route("/api/articles/{id}", get(handler::get_one))
         .route("/api/articles/{id}/read", post(handler::mark_read))
         .route("/api/articles/{id}/summarize", post(handler::summarize))

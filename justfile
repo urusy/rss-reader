@@ -49,6 +49,7 @@ lint:
 
 test:
     cd backend && cargo test
+    cd frontend && pnpm install && pnpm test
 
 # --- Database migrations (needs: cargo install sqlx-cli) ------------------
 

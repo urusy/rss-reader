@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RSS Reader</title>
+    <!-- ゼロ FOUC: バンドル読込前に dark クラス + color-scheme を当てる。
+         ランタイムの真実は lib/theme.ts。ここは最初の1フレームの当てのみ。 -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t !== "light" && t !== "dark") {
+            t =
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          }
+          var el = document.documentElement;
+          if (t === "dark") el.classList.add("dark");
+          el.style.colorScheme = t;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
