@@ -51,6 +51,10 @@ test:
     cd backend && cargo test
     cd frontend && pnpm install && pnpm test
 
+# HTTP integration tests against the running stack (needs: just up first).
+itest:
+    bash scripts/test/run-all.sh
+
 # --- Database migrations (needs: cargo install sqlx-cli) ------------------
 
 migrate:
