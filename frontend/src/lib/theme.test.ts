@@ -8,11 +8,11 @@ beforeEach(() => {
   document.documentElement.style.colorScheme = "";
 });
 
-test("initialTheme prefers localStorage", () => {
-  localStorage.setItem("theme", "dark");
-  expect(theme.initialTheme()).toBe("dark");
-  localStorage.setItem("theme", "light");
-  expect(theme.initialTheme()).toBe("light");
+test("initialTheme prefers localStorage (all 4 themes)", () => {
+  for (const t of theme.THEMES) {
+    localStorage.setItem("theme", t);
+    expect(theme.initialTheme()).toBe(t);
+  }
 });
 
 test("initialTheme ignores invalid stored value and falls back to prefers", () => {
@@ -29,36 +29,58 @@ test("initialTheme follows prefers when unset", () => {
 });
 
 test("initialTheme defaults to light when matchMedia is unavailable", () => {
-  // jsdom 既定で window.matchMedia は undefined → optional-chaining ガードで light
   expect(theme.initialTheme()).toBe("light");
 });
 
-test("applyTheme reflects to DOM", () => {
-  theme.applyTheme("dark");
-  expect(document.documentElement.classList.contains("dark")).toBe(true);
-  expect(document.documentElement.style.colorScheme).toBe("dark");
+test("applyTheme sets the right class and color-scheme per theme", () => {
+  const el = document.documentElement;
+
   theme.applyTheme("light");
-  expect(document.documentElement.classList.contains("dark")).toBe(false);
-  expect(document.documentElement.style.colorScheme).toBe("light");
+  expect(el.classList.contains("dark")).toBe(false);
+  expect(el.className).toBe("");
+  expect(el.style.colorScheme).toBe("light");
+
+  theme.applyTheme("dark");
+  expect(el.classList.contains("dark")).toBe(true);
+  expect(el.style.colorScheme).toBe("dark");
+
+  theme.applyTheme("graphite");
+  expect(el.classList.contains("graphite")).toBe(true);
+  expect(el.style.colorScheme).toBe("dark"); // graphite は暗色系
+
+  theme.applyTheme("sepia");
+  expect(el.classList.contains("sepia")).toBe(true);
+  expect(el.style.colorScheme).toBe("light"); // sepia は明色系
+});
+
+test("applyTheme removes the previous theme class when switching", () => {
+  const el = document.documentElement;
+  theme.applyTheme("dark");
+  theme.applyTheme("sepia");
+  expect(el.classList.contains("dark")).toBe(false);
+  expect(el.classList.contains("sepia")).toBe(true);
 });
 
 test("setTheme updates signal, storage and DOM", () => {
-  theme.setTheme("dark");
-  expect(theme.theme()).toBe("dark");
-  expect(localStorage.getItem("theme")).toBe("dark");
-  expect(document.documentElement.classList.contains("dark")).toBe(true);
+  theme.setTheme("graphite");
+  expect(theme.theme()).toBe("graphite");
+  expect(localStorage.getItem("theme")).toBe("graphite");
+  expect(document.documentElement.classList.contains("graphite")).toBe(true);
 });
 
-test("toggleTheme round-trips", () => {
+test("toggleTheme cycles light -> dark -> graphite -> sepia -> light", () => {
   theme.setTheme("light");
   theme.toggleTheme();
   expect(theme.theme()).toBe("dark");
+  theme.toggleTheme();
+  expect(theme.theme()).toBe("graphite");
+  theme.toggleTheme();
+  expect(theme.theme()).toBe("sepia");
   theme.toggleTheme();
   expect(theme.theme()).toBe("light");
 });
 
 test("importing theme has no side effects", () => {
-  // モジュール eval は環境を読まない（jsdom で matchMedia 未定義でも安全）
-  expect(document.documentElement.classList.contains("dark")).toBe(false);
+  expect(document.documentElement.className).toBe("");
   expect(localStorage.getItem("theme")).toBeNull();
 });

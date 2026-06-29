@@ -1,8 +1,25 @@
 import { createSignal } from "solid-js";
 
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "graphite" | "sepia";
 
 export const STORAGE_KEY = "theme";
+
+/** 選択肢の順序（toggle の巡回順・セレクトの並び）。 */
+export const THEMES: Theme[] = ["light", "dark", "graphite", "sepia"];
+
+export const THEME_LABELS: Record<Theme, string> = {
+  light: "ライト",
+  dark: "ダーク",
+  graphite: "グラファイト",
+  sepia: "セピア",
+};
+
+/** 暗色系テーマ（color-scheme=dark を当て、dark: ユーティリティを効かせる対象）。 */
+const DARK_THEMES: Theme[] = ["dark", "graphite"];
+
+function isTheme(v: unknown): v is Theme {
+  return typeof v === "string" && (THEMES as string[]).includes(v);
+}
 
 /** prefers-color-scheme: dark か。matchMedia 未実装環境（jsdom 既定）でも安全に false。 */
 function prefersDark(): boolean {
@@ -16,15 +33,17 @@ function prefersDark(): boolean {
 export function initialTheme(): Theme {
   const stored =
     typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-  if (stored === "light" || stored === "dark") return stored;
+  if (isTheme(stored)) return stored;
   return prefersDark() ? "dark" : "light";
 }
 
-/** <html> に dark クラスと color-scheme を反映。副作用のみ。 */
+/** <html> にテーマクラスと color-scheme を反映。副作用のみ。light はクラスなし（:root）。 */
 export function applyTheme(t: Theme): void {
   const el = document.documentElement;
-  el.classList.toggle("dark", t === "dark");
-  el.style.colorScheme = t; // ネイティブ UI（スクロールバー/フォーム/キャンバス）も追従
+  el.classList.remove("dark", "graphite", "sepia");
+  if (t !== "light") el.classList.add(t);
+  // ネイティブ UI（スクロールバー/フォーム/キャンバス）も暗色/明色に追従。
+  el.style.colorScheme = DARK_THEMES.includes(t) ? "dark" : "light";
 }
 
 // 安価な定数で seed（import 時に matchMedia / localStorage を読まない＝テスト容易・jsdom 安全）。
@@ -38,8 +57,10 @@ export function setTheme(t: Theme): void {
   applyTheme(t);
 }
 
+/** THEMES の順に巡回（light→dark→graphite→sepia→light）。 */
 export function toggleTheme(): void {
-  setTheme(theme() === "dark" ? "light" : "dark");
+  const i = THEMES.indexOf(theme());
+  setTheme(THEMES[(i + 1) % THEMES.length]);
 }
 
 /**
