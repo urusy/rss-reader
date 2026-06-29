@@ -37,10 +37,11 @@ post() { curl -s -m8 -w '\n%{http_code}' -X POST -H 'Content-Type: application/j
 want() { if [ "$code" = "$2" ]; then echo "PASS: $1 ($code)"; pass=$((pass+1)); else echo "FAIL: $1 expected $2 got $code"; fail=$((fail+1)); fi; }
 unread_of() { curl -s -m8 "$BASE/api/articles?feed_id=$1&unread=true" | jq 'length'; }
 
-# 1. endpoint exists + 204
+# 1. endpoint exists + 204 (feed-scoped so routine runs don't mark OTHER feeds read;
+#    the global empty-body `{}` path is exercised only under RUN_DESTRUCTIVE in case 4)
 seed
-out="$(post /api/articles/read-all '{}')"; code="${out##*$'\n'}"
-want "1 read-all {} -> 204" 204
+out="$(post /api/articles/read-all "{\"feed_id\":\"$A\"}")"; code="${out##*$'\n'}"
+want "1 read-all (feed A) -> 204" 204
 
 # 2. per-feed scope (mark A read, leave B)
 seed
