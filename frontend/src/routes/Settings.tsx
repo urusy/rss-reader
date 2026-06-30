@@ -1,5 +1,5 @@
 import { createResource, createSignal, For, Show } from "solid-js";
-import { api, type ImportSummary } from "@/lib/api";
+import { api, errorStatus, type ImportSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +42,49 @@ export default function Settings() {
       setError(String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // --- OPML (#17) ---
+  const [opmlBusy, setOpmlBusy] = createSignal(false);
+  const [opmlMsg, setOpmlMsg] = createSignal<string | null>(null);
+  const [opmlError, setOpmlError] = createSignal<string | null>(null);
+
+  const exportOpml = async () => {
+    setOpmlBusy(true);
+    setOpmlError(null);
+    try {
+      const blob = await api.exportOpml();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "feeds.opml";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setOpmlError(String(e));
+    } finally {
+      setOpmlBusy(false);
+    }
+  };
+
+  const importOpml = async (file: File) => {
+    setOpmlBusy(true);
+    setOpmlError(null);
+    setOpmlMsg(null);
+    try {
+      const r = await api.importOpml(await file.text());
+      setOpmlMsg(
+        `フィード ${r.imported_feeds} 件 / フォルダ ${r.imported_folders} 件 / スキップ ${r.skipped} 件`,
+      );
+      app.refetchFeeds();
+      app.refetchFolders();
+    } catch (e) {
+      setOpmlError(
+        errorStatus(e) === 400 ? "OPML を解析できませんでした" : `インポート失敗: ${String(e)}`,
+      );
+    } finally {
+      setOpmlBusy(false);
     }
   };
 
@@ -186,6 +229,48 @@ export default function Settings() {
               disabled={rlSettings.loading}
               onCheckedChange={(d) => void onToggleReadOnSave(d.checked)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>OPML 入出力</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <p class="text-xs text-muted-foreground">
+            他のリーダーからフィードを取り込んだり、購読リストを書き出せます。
+            フィードは URL、フォルダは名前で重複排除されます（記事は含まれません）。
+          </p>
+          <Show when={opmlError()}>
+            <p class="text-sm text-destructive">{opmlError()}</p>
+          </Show>
+          <Show when={opmlMsg()}>
+            <p class="text-sm text-muted-foreground">{opmlMsg()}</p>
+          </Show>
+          <div class="flex flex-wrap items-center gap-2">
+            <Button onClick={exportOpml} disabled={opmlBusy()}>
+              {opmlBusy() ? "処理中…" : "OPML をエクスポート"}
+            </Button>
+            <label class="inline-flex">
+              <input
+                type="file"
+                accept=".opml,.xml,text/xml,application/xml"
+                class="hidden"
+                disabled={opmlBusy()}
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0];
+                  if (f) void importOpml(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <span
+                class="inline-flex h-9 cursor-pointer items-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent hover:text-accent-foreground pointer-coarse:min-h-11"
+                classList={{ "pointer-events-none opacity-50": opmlBusy() }}
+              >
+                OPML をインポート（ファイル選択）
+              </span>
+            </label>
           </div>
         </CardContent>
       </Card>

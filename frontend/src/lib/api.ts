@@ -89,6 +89,15 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface ImportOpmlResult {
+  imported_feeds: number;
+  imported_folders: number;
+  skipped: number;
+}
+
+// エクスポートはファイルダウンロードなので http<T>(JSON前提) を通さずアンカーで開く。
+export const OPML_EXPORT_URL = "/api/opml/export";
+
 export interface ReadLaterItem {
   article_id: string;
   status: "pending" | "added" | "failed";
@@ -214,6 +223,21 @@ export const api = {
     }
   },
   listReadLater: () => http<ReadLaterItem[]>("/api/read-later"),
+  importOpml: (xml: string) =>
+    http<ImportOpmlResult>("/api/opml/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/xml" },
+      body: xml,
+    }),
+  // 認証有効時もヘッダが載るよう fetch+Blob で取得（アンカーだと Bearer が付かない）。
+  exportOpml: async (): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(OPML_EXPORT_URL, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
+    return res.blob();
+  },
   getReadLaterSettings: () =>
     http<ReadLaterSettings>("/api/read-later/settings"),
   setReadLaterSettings: (mark_read_on_save: boolean) =>
