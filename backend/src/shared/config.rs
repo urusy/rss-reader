@@ -10,6 +10,8 @@ pub struct AppConfig {
     pub bind_addr: SocketAddr,
     /// Optional until the summarization/translation feature is enabled.
     pub anthropic_api_key: Option<String>,
+    /// Shared bearer token guarding /api. None (unset) = auth disabled (LAN default).
+    pub auth_token: Option<String>,
     /// Anthropic model id used for summaries/translation.
     pub anthropic_model: String,
     /// How often the scheduler refreshes feeds, in seconds.
@@ -31,10 +33,14 @@ impl AppConfig {
             .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
             .parse()?;
 
-        let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY").ok().filter(|v| !v.is_empty());
+        let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY")
+            .ok()
+            .filter(|v| !v.is_empty());
 
-        let anthropic_model = std::env::var("ANTHROPIC_MODEL")
-            .unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
+        let auth_token = std::env::var("AUTH_TOKEN").ok().filter(|v| !v.is_empty());
+
+        let anthropic_model =
+            std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
 
         let feed_refresh_interval_secs = std::env::var("FEED_REFRESH_INTERVAL_SECS")
             .ok()
@@ -60,11 +66,29 @@ impl AppConfig {
             database_url,
             bind_addr,
             anthropic_api_key,
+            auth_token,
             anthropic_model,
             feed_refresh_interval_secs,
             extract_on_crawl,
             extract_max_bytes,
             extract_min_chars,
         })
+    }
+
+    /// Minimal config for unit/integration tests. Only `auth_token` is meaningful;
+    /// other fields get harmless defaults. Test-only, never used in production.
+    #[cfg(test)]
+    pub fn for_test(auth_token: Option<String>) -> Self {
+        Self {
+            database_url: "postgres://invalid/invalid".to_string(),
+            bind_addr: "0.0.0.0:8080".parse().unwrap(),
+            anthropic_api_key: None,
+            auth_token,
+            anthropic_model: "claude-sonnet-4-6".to_string(),
+            feed_refresh_interval_secs: 900,
+            extract_on_crawl: false,
+            extract_max_bytes: 3_000_000,
+            extract_min_chars: 200,
+        }
     }
 }

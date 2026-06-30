@@ -25,6 +25,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       FEED_REFRESH_INTERVAL_SECS: ${FEED_REFRESH_INTERVAL_SECS:-900}
+      # Auth: unset = disabled (LAN default). Set to require Bearer token on /api.
+      AUTH_TOKEN: ${AUTH_TOKEN:-}
       RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
     depends_on:
       db:

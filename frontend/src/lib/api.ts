@@ -1,4 +1,9 @@
 // Thin typed client over the Rust backend. All paths are proxied to :8080 in dev.
+import { getToken, clearToken } from "@/lib/auth";
+
+export interface AuthStatus {
+  required: boolean;
+}
 
 export interface Feed {
   id: string;
@@ -70,10 +75,19 @@ export function errorStatus(e: unknown): number | null {
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: {
+      "Content-Type": "application/json",
+      // トークンがあれば全リクエストに付与。init.headers を最後に展開し上書き可能に保つ。
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
+  if (res.status === 401) {
+    clearToken(); // 失効/誤トークン → ゲート表示へ（authToken signal が反応）
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
@@ -185,5 +199,13 @@ export const api = {
     http<Article>(`/api/articles/${id}/extract`, {
       method: "POST",
       body: JSON.stringify({ force }),
+    }),
+  // ゲート要否（公開エンドポイント。トークン無しでも 200）。
+  getAuthStatus: () => http<AuthStatus>("/api/auth/status"),
+  // トークン検証（保存前/起動時チェック）。不一致は 401 を throw。
+  login: (token: string) =>
+    http<{ ok: boolean }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ token }),
     }),
 };

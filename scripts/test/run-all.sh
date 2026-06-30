@@ -10,6 +10,7 @@ BASE="${1:-http://localhost:8081}"
 # Order matters slightly: stateless/read first, destructive read-all last (its
 # whole-DB case is guarded behind RUN_DESTRUCTIVE and skipped by default).
 scripts=(
+  api-auth.sh
   api-stats.sh
   api-feeds.sh
   api-feed-overview.sh

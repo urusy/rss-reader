@@ -1,4 +1,5 @@
 pub mod articles;
+pub mod auth;
 pub mod extraction;
 pub mod feed_overview;
 pub mod feeds;
@@ -8,19 +9,25 @@ pub mod instapaper;
 pub mod search;
 pub mod stats;
 
-use axum::Router;
+use axum::{middleware, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
+use crate::shared::auth::require_auth;
 use crate::shared::state::AppState;
 
 /// Compose every vertical slice into the top-level router.
 ///
 /// Each feature owns its own `routes()` returning a `Router<AppState>`. Adding a
 /// feature = add one module + one `.merge()` line. Existing slices stay untouched.
+///
+/// Routes split into public (health + auth login/status) and protected (the
+/// rest). The protected subrouter carries `require_auth`; with AUTH_TOKEN unset
+/// the middleware is a pass-through, so behavior is unchanged by default.
 pub fn router(state: AppState) -> Router {
-    Router::new()
-        .merge(health::routes())
+    let public = Router::new().merge(health::routes()).merge(auth::routes());
+
+    let protected = Router::new()
         .merge(feeds::routes())
         .merge(articles::routes())
         .merge(extraction::routes())
@@ -29,6 +36,11 @@ pub fn router(state: AppState) -> Router {
         .merge(folders::routes())
         .merge(instapaper::routes())
         .merge(search::routes())
+        .layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
+    Router::new()
+        .merge(public)
+        .merge(protected)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive()) // tighten before exposing beyond your LAN
         .with_state(state)
