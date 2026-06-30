@@ -16,6 +16,7 @@ scripts=(
   api-folders.sh
   api-instapaper.sh
   api-search.sh
+  api-extraction.sh
   read-later.sh
   api-articles-read-all.sh
 )

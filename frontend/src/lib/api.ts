@@ -22,6 +22,9 @@ export interface Article {
   url: string;
   title: string;
   content: string;
+  /** Full body extracted on demand from the source URL; null until extracted. */
+  full_content: string | null;
+  extracted_at: string | null;
   published_at: string | null;
   is_read: boolean;
   summary: string | null;
@@ -175,5 +178,12 @@ export const api = {
     http<Article>(`/api/articles/${id}/translate`, {
       method: "POST",
       body: JSON.stringify({ lang }),
+    }),
+  // 記事本文をサーバ側で抽出し full_content をキャッシュ。更新後 Article を返す。
+  // full_content が null のまま返ったら「抽出できなかった」= 抜粋にフォールバック。
+  extractArticle: (id: string, force = false) =>
+    http<Article>(`/api/articles/${id}/extract`, {
+      method: "POST",
+      body: JSON.stringify({ force }),
     }),
 };

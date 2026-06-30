@@ -14,6 +14,12 @@ pub struct AppConfig {
     pub anthropic_model: String,
     /// How often the scheduler refreshes feeds, in seconds.
     pub feed_refresh_interval_secs: u64,
+    /// Opt-in: extract full article bodies during crawl (best-effort). Default false.
+    pub extract_on_crawl: bool,
+    /// Max bytes of a fetched page we will attempt to extract (guards memory).
+    pub extract_max_bytes: usize,
+    /// Minimum plain-text chars for an extraction to count as "real body".
+    pub extract_min_chars: usize,
 }
 
 impl AppConfig {
@@ -35,12 +41,30 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(900);
 
+        let extract_on_crawl = std::env::var("EXTRACT_ON_CRAWL")
+            .ok()
+            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
+        let extract_max_bytes = std::env::var("EXTRACT_MAX_BYTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3_000_000);
+
+        let extract_min_chars = std::env::var("EXTRACT_MIN_CHARS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(200);
+
         Ok(Self {
             database_url,
             bind_addr,
             anthropic_api_key,
             anthropic_model,
             feed_refresh_interval_secs,
+            extract_on_crawl,
+            extract_max_bytes,
+            extract_min_chars,
         })
     }
 }

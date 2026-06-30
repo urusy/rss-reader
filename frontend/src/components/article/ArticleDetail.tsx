@@ -23,7 +23,13 @@ import { Button } from "@/components/ui/button";
 export default function ArticleDetail(props: { id: string | undefined }) {
   const app = useApp();
   const [article, { mutate }] = createResource(() => props.id, api.getArticle);
-  const [busy, setBusy] = createSignal<"summarize" | "translate" | null>(null);
+  const [busy, setBusy] = createSignal<
+    "summarize" | "translate" | "extract" | null
+  >(null);
+  // 全文取得後に「抜粋/全文」を見比べるためのローカル状態。
+  const [showExcerpt, setShowExcerpt] = createSignal(false);
+  // 抽出を試みたが本文が薄く取得できなかった時のヒント。
+  const [extractMiss, setExtractMiss] = createSignal(false);
   let articleEl: HTMLElement | undefined;
 
   // 後で読む（Instapaper）の保存状態。null = 未保存。
@@ -106,6 +112,31 @@ export default function ArticleDetail(props: { id: string | undefined }) {
     }
   };
 
+  // サーバ側で本文を抽出して full_content をキャッシュ。null のまま返れば抜粋にフォールバック。
+  const extract = async () => {
+    const id = props.id;
+    if (!id) return;
+    setBusy("extract");
+    setExtractMiss(false);
+    try {
+      const updated = await api.extractArticle(id);
+      mutate(updated);
+      if (!updated.full_content) setExtractMiss(true);
+      else setShowExcerpt(false);
+    } catch (e) {
+      alert(`全文の取得に失敗しました: ${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // 表示する本文 HTML: 全文があり「抜粋表示」でなければ全文、無ければ content。
+  // バックエンドで浄化済みでも多層防御で必ず再サニタイズする（既存方針）。
+  const bodyHtml = (a: Article) => {
+    const useFull = a.full_content && !showExcerpt();
+    return sanitizeArticleHtml(useFull ? a.full_content! : a.content);
+  };
+
   return (
     <Show
       when={article()}
@@ -151,7 +182,35 @@ export default function ArticleDetail(props: { id: string | undefined }) {
                     ? "再試行"
                     : "後で読む"}
             </Button>
+            {/* 全文未取得なら「全文を取得」、取得済みなら抜粋/全文トグル。 */}
+            <Show
+              when={a().full_content}
+              fallback={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={extract}
+                  disabled={busy() !== null}
+                >
+                  {busy() === "extract" ? "取得中…" : "全文を取得"}
+                </Button>
+              }
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowExcerpt((v) => !v)}
+              >
+                {showExcerpt() ? "全文を表示" : "抜粋を表示"}
+              </Button>
+            </Show>
           </div>
+
+          <Show when={extractMiss()}>
+            <p class="text-xs text-muted-foreground">
+              全文を取得できませんでした（抜粋を表示中）。
+            </p>
+          </Show>
 
           <Show when={later()?.status === "failed" && later()?.last_error}>
             <p class="text-xs text-muted-foreground">保存に失敗: {later()?.last_error}</p>
@@ -176,11 +235,12 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             </section>
           </Show>
 
-          {/* フィード本文は信頼できない HTML。innerHTML 前に必ず浄化する
-              （埋め込み <style> によるレイアウト破壊・XSS 対策）。 */}
+          {/* 本文は信頼できない HTML。innerHTML 前に必ず浄化する
+              （埋め込み <style> によるレイアウト破壊・XSS 対策）。
+              full_content があれば優先表示（抜粋トグル時は content）。 */}
           <div
             class="prose prose-sm dark:prose-invert max-w-none"
-            innerHTML={sanitizeArticleHtml(a().content)}
+            innerHTML={bodyHtml(a())}
           />
         </article>
       )}

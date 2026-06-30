@@ -119,6 +119,15 @@ pub async fn fetch_and_store(state: &AppState, feed: &Feed) -> AppResult<()> {
             published,
         )
         .await?;
+
+        // Optional crawl-time full-content extraction (EXTRACT_ON_CRAWL=true).
+        // Best-effort + idempotent (skips already-extracted rows). Default off,
+        // so behavior is unchanged unless explicitly opted in.
+        if state.config.extract_on_crawl {
+            if let Some(id) = articles::repository::id_by_url(&state.db, &url).await? {
+                crate::features::extraction::service::extract_best_effort(state, id).await;
+            }
+        }
     }
 
     repository::touch_fetched(&state.db, feed.id, feed_title.as_deref()).await?;

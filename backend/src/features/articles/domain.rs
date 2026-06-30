@@ -16,6 +16,11 @@ pub struct Article {
     pub url: String,
     pub title: String,
     pub content: String,
+    /// Full body extracted on demand from the source URL (DOM heuristic +
+    /// sanitize). NULL until extraction succeeds; AI features prefer this over
+    /// `content` when present. See features/extraction.
+    pub full_content: Option<String>,
+    pub extracted_at: Option<chrono::DateTime<chrono::Utc>>,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub is_read: bool,
     pub summary: Option<String>,

@@ -1,4 +1,5 @@
 pub mod articles;
+pub mod extraction;
 pub mod feed_overview;
 pub mod feeds;
 pub mod folders;
@@ -22,6 +23,7 @@ pub fn router(state: AppState) -> Router {
         .merge(health::routes())
         .merge(feeds::routes())
         .merge(articles::routes())
+        .merge(extraction::routes())
         .merge(stats::routes())
         .merge(feed_overview::routes())
         .merge(folders::routes())

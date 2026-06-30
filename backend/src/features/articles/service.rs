@@ -33,6 +33,17 @@ pub async fn mark_all_read(state: &AppState, feed_id: Option<FeedId>) -> AppResu
     repository::mark_all_read(&state.db, feed_id).await
 }
 
+/// Pick the body to feed the LLM: the extracted full body when present,
+/// otherwise the feed-provided excerpt. This is the payoff of the extraction
+/// feature — every AI feature gets a higher-quality input for free. Kept as a
+/// one-liner (no shared cross-slice abstraction, per the trait-only-for-llm rule).
+fn ai_input(article: &Article) -> String {
+    article
+        .full_content
+        .clone()
+        .unwrap_or_else(|| article.content.clone())
+}
+
 /// Build an Anthropic client from config, or fail with a clear "not enabled"
 /// error if no API key is set yet.
 fn llm_client(state: &AppState) -> AppResult<AnthropicClient> {
@@ -64,7 +75,7 @@ pub async fn summarize_article(
     let summary = client
         .summarize(SummarizeRequest {
             title: article.title.clone(),
-            content: article.content.clone(),
+            content: ai_input(&article),
             target_lang: target_lang.to_string(),
         })
         .await?;
@@ -87,7 +98,7 @@ pub async fn translate_article(
     let client = llm_client(state)?;
     let translation = client
         .translate(TranslateRequest {
-            content: article.content.clone(),
+            content: ai_input(&article),
             target_lang: target_lang.to_string(),
         })
         .await?;
