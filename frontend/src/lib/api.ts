@@ -85,6 +85,10 @@ export interface InstapaperStatus {
   configured: boolean;
 }
 
+export interface ReadLaterSettings {
+  mark_read_on_save: boolean;
+}
+
 export interface ReadLaterItem {
   article_id: string;
   status: "pending" | "added" | "failed";
@@ -210,6 +214,13 @@ export const api = {
     }
   },
   listReadLater: () => http<ReadLaterItem[]>("/api/read-later"),
+  getReadLaterSettings: () =>
+    http<ReadLaterSettings>("/api/read-later/settings"),
+  setReadLaterSettings: (mark_read_on_save: boolean) =>
+    http<ReadLaterSettings>("/api/read-later/settings", {
+      method: "PUT",
+      body: JSON.stringify({ mark_read_on_save }),
+    }),
   summarize: (id: string, lang = "ja") =>
     http<Article>(`/api/articles/${id}/summarize`, {
       method: "POST",

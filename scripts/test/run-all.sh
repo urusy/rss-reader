@@ -20,6 +20,7 @@ scripts=(
   api-extraction.sh
   api-backup.sh
   read-later.sh
+  read-on-save.sh
   api-articles-read-all.sh
 )
 

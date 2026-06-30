@@ -118,6 +118,24 @@ pub mod read_later_status {
     pub const FAILED: &str = "failed";
 }
 
+// ---- 機能16 Read-on-Save: read_later_settings のドメイン ----
+
+/// read_later_settings (singleton) の射影。Read-on-Save の ON/OFF を保持する。
+/// GET /api/read-later/settings がそのまま返す安全な射影（秘密情報を含まない）。
+#[derive(Debug, Clone, Copy, Serialize, sqlx::FromRow)]
+pub struct ReadLaterSettings {
+    pub mark_read_on_save: bool,
+}
+
+impl Default for ReadLaterSettings {
+    /// 行が無い場合の既定（OFF）。リポジトリの防御的フォールバックで使う。
+    fn default() -> Self {
+        Self {
+            mark_read_on_save: false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +208,20 @@ mod tests {
         assert_eq!(classify_auth_status(200), AuthOutcome::Valid);
         assert_eq!(classify_auth_status(403), AuthOutcome::Invalid);
         assert_eq!(classify_auth_status(500), AuthOutcome::Failed);
+    }
+
+    #[test]
+    fn settings_default_is_off() {
+        assert!(!ReadLaterSettings::default().mark_read_on_save);
+    }
+
+    #[test]
+    fn settings_serializes_to_expected_json() {
+        let s = serde_json::to_string(&ReadLaterSettings {
+            mark_read_on_save: true,
+        })
+        .unwrap();
+        assert_eq!(s, r#"{"mark_read_on_save":true}"#);
     }
 
     #[test]

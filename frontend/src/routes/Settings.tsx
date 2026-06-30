@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useApp } from "@/lib/store";
 
 export default function Settings() {
@@ -41,6 +42,21 @@ export default function Settings() {
       setError(String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // --- Read-on-Save (#16) ---
+  const [rlSettings, { mutate: mutateRl }] = createResource(() =>
+    api.getReadLaterSettings(),
+  );
+  const onToggleReadOnSave = async (next: boolean) => {
+    const prev = rlSettings();
+    mutateRl({ mark_read_on_save: next });
+    try {
+      mutateRl(await api.setReadLaterSettings(next));
+    } catch (e) {
+      mutateRl(prev);
+      alert(`設定の更新に失敗しました: ${String(e)}`);
     }
   };
 
@@ -156,6 +172,20 @@ export default function Settings() {
                 資格情報を削除
               </Button>
             </Show>
+          </div>
+
+          <div class="flex items-start justify-between gap-3 border-t border-border pt-3">
+            <div>
+              <p class="text-sm">Instapaper に送ったら自動で既読にする</p>
+              <p class="text-xs text-muted-foreground">
+                「後で読む」に送った記事を未読一覧から外し、未読数の膨張を防ぎます。
+              </p>
+            </div>
+            <Switch
+              checked={rlSettings()?.mark_read_on_save ?? false}
+              disabled={rlSettings.loading}
+              onCheckedChange={(d) => void onToggleReadOnSave(d.checked)}
+            />
           </div>
         </CardContent>
       </Card>

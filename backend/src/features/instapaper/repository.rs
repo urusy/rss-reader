@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::domain::{ReadLaterItem, StoredCredentials};
+use super::domain::{ReadLaterItem, ReadLaterSettings, StoredCredentials};
 use crate::features::articles::domain::ArticleId;
 use crate::shared::error::AppResult;
 
@@ -116,6 +116,38 @@ pub async fn list_items(pool: &PgPool) -> AppResult<Vec<ReadLaterItem>> {
     Ok(rows)
 }
 
+// ---- 機能16 Read-on-Save: read_later_settings (singleton) ----
+
+/// 設定を取得。シード済み singleton 行を読む。万一行が無ければ既定（OFF）。
+pub async fn get_settings(pool: &PgPool) -> AppResult<ReadLaterSettings> {
+    let row = sqlx::query_as::<_, ReadLaterSettings>(
+        "SELECT mark_read_on_save FROM read_later_settings WHERE id = 1",
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.unwrap_or_default())
+}
+
+/// Read-on-Save の ON/OFF を更新（singleton upsert）。
+pub async fn set_mark_read_on_save(pool: &PgPool, enabled: bool) -> AppResult<()> {
+    sqlx::query(
+        r#"INSERT INTO read_later_settings (id, mark_read_on_save, updated_at)
+           VALUES (1, $1, now())
+           ON CONFLICT (id) DO UPDATE
+             SET mark_read_on_save = EXCLUDED.mark_read_on_save,
+                 updated_at = now()"#,
+    )
+    .bind(enabled)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// save_for_later の成功分岐から呼ぶ真偽ヘルパ。
+pub async fn mark_read_on_save_enabled(pool: &PgPool) -> AppResult<bool> {
+    Ok(get_settings(pool).await?.mark_read_on_save)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +186,16 @@ mod tests {
 
         delete_credentials(&pool).await.unwrap();
         assert!(get_credentials(&pool).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running Postgres (DATABASE_URL)"]
+    async fn settings_roundtrip_toggle() {
+        let pool = pool().await;
+        set_mark_read_on_save(&pool, true).await.unwrap();
+        assert!(get_settings(&pool).await.unwrap().mark_read_on_save);
+        assert!(mark_read_on_save_enabled(&pool).await.unwrap());
+        set_mark_read_on_save(&pool, false).await.unwrap();
+        assert!(!get_settings(&pool).await.unwrap().mark_read_on_save);
     }
 }
