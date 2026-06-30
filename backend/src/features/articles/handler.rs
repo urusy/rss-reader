@@ -19,6 +19,9 @@ pub struct ListQuery {
     pub folder_id: Option<Uuid>,
     #[serde(default)]
     pub unclassified: bool,
+    /// true=ミュート(hide)済みも返す（管理プレビュー）。既定 false=除外。#19
+    #[serde(default)]
+    pub include_muted: bool,
 }
 
 pub async fn list(
@@ -31,6 +34,7 @@ pub async fn list(
         q.unread,
         q.folder_id.map(FolderId),
         q.unclassified,
+        q.include_muted,
     )
     .await?;
     Ok(Json(articles))

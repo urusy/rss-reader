@@ -89,6 +89,23 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface MuteRule {
+  id: string;
+  field: "title" | "content" | "url";
+  pattern: string;
+  match_type: "contains";
+  action: "hide" | "mark_read";
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MuteApplyReport {
+  rules_evaluated: number;
+  hidden: number;
+  marked_read: number;
+}
+
 export interface ImportOpmlResult {
   imported_feeds: number;
   imported_folders: number;
@@ -223,6 +240,30 @@ export const api = {
     }
   },
   listReadLater: () => http<ReadLaterItem[]>("/api/read-later"),
+  // --- ミュート (#19) ---
+  listMuteRules: () => http<MuteRule[]>("/api/mute-rules"),
+  createMuteRule: (input: {
+    field: MuteRule["field"];
+    pattern: string;
+    action?: MuteRule["action"];
+    enabled?: boolean;
+  }) =>
+    http<MuteRule>("/api/mute-rules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateMuteRule: (
+    id: string,
+    patch: Partial<Pick<MuteRule, "field" | "pattern" | "action" | "enabled">>,
+  ) =>
+    http<MuteRule>(`/api/mute-rules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteMuteRule: (id: string) =>
+    http<void>(`/api/mute-rules/${id}`, { method: "DELETE" }),
+  applyMuteRules: () =>
+    http<MuteApplyReport>("/api/mute-rules/apply", { method: "POST" }),
   importOpml: (xml: string) =>
     http<ImportOpmlResult>("/api/opml/import", {
       method: "POST",

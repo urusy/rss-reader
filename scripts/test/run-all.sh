@@ -19,6 +19,7 @@ scripts=(
   api-search.sh
   api-extraction.sh
   api-opml.sh
+  api-mute-rules.sh
   api-backup.sh
   read-later.sh
   read-on-save.sh

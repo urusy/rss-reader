@@ -40,6 +40,7 @@ pub async fn list(
     unread_only: bool,
     folder_id: Option<FolderId>,
     unclassified: bool,
+    include_muted: bool,
 ) -> AppResult<Vec<Article>> {
     let rows = sqlx::query_as::<_, Article>(
         r#"SELECT * FROM articles
@@ -49,6 +50,7 @@ pub async fn list(
                   OR feed_id IN (SELECT id FROM feeds WHERE folder_id = $3))
              AND ($4 = false
                   OR feed_id IN (SELECT id FROM feeds WHERE folder_id IS NULL))
+             AND ($5 = true OR muted_at IS NULL)
            ORDER BY published_at DESC NULLS LAST, created_at DESC
            LIMIT 200"#,
     )
@@ -56,6 +58,7 @@ pub async fn list(
     .bind(unread_only)
     .bind(folder_id.map(|f| f.0))
     .bind(unclassified)
+    .bind(include_muted)
     .fetch_all(pool)
     .await?;
     Ok(rows)
@@ -183,7 +186,9 @@ mod tests {
         // Unique url per run to avoid clashing with other tests / existing rows.
         let raw = format!("https://example.com/extraction-test/{}", Uuid::new_v4());
         let url = FeedUrl::parse(&raw).expect("feed url");
-        let feed = feeds_repo::insert(pool, url.as_str()).await.expect("insert feed");
+        let feed = feeds_repo::insert(pool, url.as_str())
+            .await
+            .expect("insert feed");
         FeedId(feed.id.0)
     }
 

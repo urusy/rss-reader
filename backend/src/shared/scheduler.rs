@@ -4,6 +4,7 @@ use tokio::time::{interval, MissedTickBehavior};
 
 use super::state::AppState;
 use crate::features::feeds;
+use crate::features::mute_rules;
 
 /// Spawn the periodic feed-refresh loop.
 ///
@@ -22,6 +23,10 @@ pub fn spawn(state: AppState) {
             tracing::info!("scheduled feed refresh starting");
             if let Err(e) = feeds::service::refresh_all_feeds(&state).await {
                 tracing::error!(error = %e, "feed refresh failed");
+            }
+            // #19: 新着にミュートを反映（hide リセット→再付与で冪等）。失敗してもクロールは継続。
+            if let Err(e) = mute_rules::service::apply_all(&state).await {
+                tracing::error!(error = %e, "mute apply failed");
             }
         }
     });

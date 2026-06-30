@@ -28,5 +28,7 @@ pub struct Article {
     pub translation: Option<String>,
     pub translation_lang: Option<String>,
     pub processed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// hide ミュート合致のスタンプ。NULL=表示。#19 mute_rules
+    pub muted_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }

@@ -7,6 +7,7 @@ pub mod feeds;
 pub mod folders;
 pub mod health;
 pub mod instapaper;
+pub mod mute_rules;
 pub mod opml;
 pub mod search;
 pub mod stats;
@@ -39,6 +40,7 @@ pub fn router(state: AppState) -> Router {
         .merge(instapaper::routes())
         .merge(search::routes())
         .merge(opml::routes())
+        .merge(mute_rules::routes())
         .merge(backup::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useApp } from "@/lib/store";
+import MuteRulesManager from "@/components/mute/MuteRulesManager";
 
 export default function Settings() {
   const [status, { refetch }] = createResource(() => api.getInstapaperStatus());
@@ -230,6 +231,18 @@ export default function Settings() {
               onCheckedChange={(d) => void onToggleReadOnSave(d.checked)}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>ミュート（NGワード）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="mb-3 text-xs text-muted-foreground">
+            指定した語を含む記事を一覧から非表示、または自動既読にします（部分一致・大小無視）。
+          </p>
+          <MuteRulesManager />
         </CardContent>
       </Card>
 

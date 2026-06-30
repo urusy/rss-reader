@@ -17,8 +17,17 @@ pub async fn list_articles(
     unread_only: bool,
     folder_id: Option<FolderId>,
     unclassified: bool,
+    include_muted: bool,
 ) -> AppResult<Vec<Article>> {
-    repository::list(&state.db, feed_id, unread_only, folder_id, unclassified).await
+    repository::list(
+        &state.db,
+        feed_id,
+        unread_only,
+        folder_id,
+        unclassified,
+        include_muted,
+    )
+    .await
 }
 
 pub async fn get_article(state: &AppState, id: ArticleId) -> AppResult<Article> {
