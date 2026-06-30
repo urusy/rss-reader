@@ -5,6 +5,33 @@ export interface AuthStatus {
   required: boolean;
 }
 
+export interface ImportSummary {
+  folders: number;
+  feeds: number;
+  articles: number;
+  read_later: number;
+  skipped: number;
+}
+
+export interface BackupRun {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "succeeded" | "failed";
+  file_path: string | null;
+  byte_size: number | null;
+  error: string | null;
+}
+
+// backup 用ヘッダ: X-Backup-Token（backup gate）＋ auth 有効時の Authorization。
+function backupHeaders(backupToken: string): Record<string, string> {
+  const authToken = getToken();
+  return {
+    "X-Backup-Token": backupToken,
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+  };
+}
+
 export interface Feed {
   id: string;
   url: string;
@@ -200,6 +227,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ force }),
     }),
+  // --- バックアップ / 復元 ---
+  // backup token は X-Backup-Token で送る（auth middleware の Authorization と衝突しない）。
+  // auth 有効時のため Authorization: Bearer <auth_token> も併せて付与する。
+  exportBackup: async (token: string): Promise<Blob> => {
+    const res = await fetch("/api/backup/export", { headers: backupHeaders(token) });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
+    return res.blob();
+  },
+  importBackup: async (token: string, ndjson: string): Promise<ImportSummary> => {
+    const res = await fetch("/api/backup/import", {
+      method: "POST",
+      headers: { ...backupHeaders(token), "Content-Type": "application/x-ndjson" },
+      body: ndjson,
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
+    return res.json();
+  },
+  listBackupRuns: async (token: string): Promise<BackupRun[]> => {
+    const res = await fetch("/api/backup/runs", { headers: backupHeaders(token) });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
+    return res.json();
+  },
   // ゲート要否（公開エンドポイント。トークン無しでも 200）。
   getAuthStatus: () => http<AuthStatus>("/api/auth/status"),
   // トークン検証（保存前/起動時チェック）。不一致は 401 を throw。

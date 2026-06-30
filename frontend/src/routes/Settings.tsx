@@ -1,9 +1,10 @@
-import { createResource, createSignal, Show } from "solid-js";
-import { api } from "@/lib/api";
+import { createResource, createSignal, For, Show } from "solid-js";
+import { api, type ImportSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useApp } from "@/lib/store";
 
 export default function Settings() {
   const [status, { refetch }] = createResource(() => api.getInstapaperStatus());
@@ -40,6 +41,62 @@ export default function Settings() {
       setError(String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // --- バックアップ / 復元 ---
+  const app = useApp();
+  const [bkToken, setBkToken] = createSignal(
+    typeof localStorage !== "undefined"
+      ? (localStorage.getItem("backupToken") ?? "")
+      : "",
+  );
+  const onBkToken = (v: string) => {
+    setBkToken(v);
+    if (typeof localStorage !== "undefined") localStorage.setItem("backupToken", v);
+  };
+  const [bkBusy, setBkBusy] = createSignal(false);
+  const [bkError, setBkError] = createSignal<string | null>(null);
+  const [bkResult, setBkResult] = createSignal<ImportSummary | null>(null);
+  const [runs, { refetch: refetchRuns }] = createResource(
+    () => (bkToken() ? bkToken() : undefined),
+    (t) => api.listBackupRuns(t).catch(() => [] as never[]),
+  );
+
+  const doExport = async () => {
+    setBkBusy(true);
+    setBkError(null);
+    setBkResult(null);
+    try {
+      const blob = await api.exportBackup(bkToken());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "rss-backup.ndjson";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setBkError(String(e));
+    } finally {
+      setBkBusy(false);
+    }
+  };
+
+  const doImport = async (file: File) => {
+    setBkBusy(true);
+    setBkError(null);
+    setBkResult(null);
+    try {
+      const text = await file.text();
+      const summary = await api.importBackup(bkToken(), text);
+      setBkResult(summary);
+      app.refetchFeeds();
+      app.refetchFolders();
+      await refetchRuns();
+    } catch (e) {
+      setBkError(String(e));
+    } finally {
+      setBkBusy(false);
     }
   };
 
@@ -100,6 +157,89 @@ export default function Settings() {
               </Button>
             </Show>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>バックアップ / 復元</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <p class="text-xs text-muted-foreground">
+            全データ（記事・フォルダ・既読・要約/翻訳キャッシュ・後で読む）を
+            NDJSON で書き出し / 取り込みます。資格情報（Instapaper）は含まれません。
+            サーバの BACKUP_TOKEN を入力してください。
+          </p>
+
+          <Show when={bkError()}>
+            <p class="text-sm text-destructive">{bkError()}</p>
+          </Show>
+          <Show when={bkResult()}>
+            {(r) => (
+              <p class="text-sm text-muted-foreground">
+                取り込みました: フォルダ {r().folders} / フィード {r().feeds} / 記事{" "}
+                {r().articles} / 後で読む {r().read_later} / スキップ {r().skipped} 件
+              </p>
+            )}
+          </Show>
+
+          <Input
+            type="password"
+            placeholder="BACKUP_TOKEN"
+            autocomplete="off"
+            value={bkToken()}
+            onInput={(e) => onBkToken(e.currentTarget.value)}
+          />
+
+          <div class="flex flex-wrap items-center gap-2">
+            <Button onClick={doExport} disabled={bkBusy() || !bkToken()}>
+              {bkBusy() ? "処理中…" : "エクスポート"}
+            </Button>
+            <label class="inline-flex">
+              <input
+                type="file"
+                accept=".ndjson,.json,application/x-ndjson"
+                class="hidden"
+                disabled={bkBusy() || !bkToken()}
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0];
+                  if (f) void doImport(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <span
+                class="inline-flex h-9 cursor-pointer items-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent hover:text-accent-foreground pointer-coarse:min-h-11"
+                classList={{ "pointer-events-none opacity-50": bkBusy() || !bkToken() }}
+              >
+                インポート（ファイル選択）
+              </span>
+            </label>
+          </div>
+
+          <Show when={(runs()?.length ?? 0) > 0}>
+            <div class="space-y-1 pt-2">
+              <h3 class="text-xs font-semibold text-muted-foreground">
+                pg_dump 実行履歴
+              </h3>
+              <ul class="space-y-1 text-xs">
+                <For each={runs()}>
+                  {(run) => (
+                    <li class="flex items-center gap-2">
+                      <Badge variant={run.status === "succeeded" ? "unread" : undefined}>
+                        {run.status}
+                      </Badge>
+                      <span class="truncate text-muted-foreground">
+                        {run.file_path ?? "—"}
+                        {run.byte_size != null
+                          ? ` (${Math.round(run.byte_size / 1024)} KB)`
+                          : ""}
+                      </span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </div>
+          </Show>
         </CardContent>
       </Card>
     </div>

@@ -40,6 +40,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Background feed-refresh loop. Swappable for apalis later (see CLAUDE.md).
     scheduler::spawn(state.clone());
+    // Optional scheduled pg_dump (no-op unless BACKUP_DIR + interval are set).
+    features::backup::service::spawn_pgdump_scheduler(state.clone());
 
     let app = features::router(state.clone());
 

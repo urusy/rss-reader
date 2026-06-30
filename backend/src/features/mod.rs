@@ -1,5 +1,6 @@
 pub mod articles;
 pub mod auth;
+pub mod backup;
 pub mod extraction;
 pub mod feed_overview;
 pub mod feeds;
@@ -36,6 +37,7 @@ pub fn router(state: AppState) -> Router {
         .merge(folders::routes())
         .merge(instapaper::routes())
         .merge(search::routes())
+        .merge(backup::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     Router::new()

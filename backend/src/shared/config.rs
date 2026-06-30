@@ -12,6 +12,12 @@ pub struct AppConfig {
     pub anthropic_api_key: Option<String>,
     /// Shared bearer token guarding /api. None (unset) = auth disabled (LAN default).
     pub auth_token: Option<String>,
+    /// Token gating /api/backup/*. None = backup feature disabled (503).
+    pub backup_token: Option<String>,
+    /// Output dir for the optional scheduled pg_dump. None = scheduler disabled.
+    pub backup_dir: Option<String>,
+    /// Interval (secs) for the optional scheduled pg_dump. None = scheduler disabled.
+    pub backup_pgdump_interval_secs: Option<u64>,
     /// Anthropic model id used for summaries/translation.
     pub anthropic_model: String,
     /// How often the scheduler refreshes feeds, in seconds.
@@ -38,6 +44,12 @@ impl AppConfig {
             .filter(|v| !v.is_empty());
 
         let auth_token = std::env::var("AUTH_TOKEN").ok().filter(|v| !v.is_empty());
+
+        let backup_token = std::env::var("BACKUP_TOKEN").ok().filter(|v| !v.is_empty());
+        let backup_dir = std::env::var("BACKUP_DIR").ok().filter(|v| !v.is_empty());
+        let backup_pgdump_interval_secs = std::env::var("BACKUP_PGDUMP_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok());
 
         let anthropic_model =
             std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
@@ -67,6 +79,9 @@ impl AppConfig {
             bind_addr,
             anthropic_api_key,
             auth_token,
+            backup_token,
+            backup_dir,
+            backup_pgdump_interval_secs,
             anthropic_model,
             feed_refresh_interval_secs,
             extract_on_crawl,
@@ -84,6 +99,9 @@ impl AppConfig {
             bind_addr: "0.0.0.0:8080".parse().unwrap(),
             anthropic_api_key: None,
             auth_token,
+            backup_token: None,
+            backup_dir: None,
+            backup_pgdump_interval_secs: None,
             anthropic_model: "claude-sonnet-4-6".to_string(),
             feed_refresh_interval_secs: 900,
             extract_on_crawl: false,
