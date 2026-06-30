@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import SidebarContent from "./SidebarContent";
 
-/** md 未満で表示するハンバーガー + 左ドロワー（Dialog side="left"）。 */
+/** lg 未満で表示するハンバーガー + 左ドロワー（Dialog side="left"）。iPad 縦も含む。 */
 export default function MobileTopBar() {
   const app = useApp();
   return (
-    <header class="flex items-center gap-2 border-b border-border px-4 py-3 md:hidden">
+    <header class="flex items-center gap-2 border-b border-border pb-3 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-[calc(0.75rem+env(safe-area-inset-top))] lg:hidden">
       <Dialog
         open={app.state.sidebarOpen}
         onOpenChange={(d) => (d.open ? app.openSidebar() : app.closeSidebar())}

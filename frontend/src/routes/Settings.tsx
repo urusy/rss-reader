@@ -44,7 +44,7 @@ export default function Settings() {
   };
 
   return (
-    <div class="space-y-6">
+    <div class="mx-auto max-w-3xl space-y-6 px-4 py-6">
       <h1 class="text-2xl font-bold tracking-tight">設定</h1>
 
       <Card>

@@ -3,6 +3,7 @@ import FeedTree from "./FeedTree";
 import { ThemeToggle } from "./ThemeToggle";
 import { FilterToggle } from "./FilterToggle";
 import { AddFeedDialog } from "./AddFeedDialog";
+import { SearchBox } from "./SearchBox";
 
 const navItem = "block h-8 px-2 rounded-md text-sm leading-8 hover:bg-accent";
 const navActive = "bg-accent text-accent-foreground";
@@ -20,6 +21,8 @@ export default function SidebarContent(props: { onNavigate?: () => void }) {
       >
         RSS Reader
       </A>
+
+      <SearchBox onNavigate={props.onNavigate} />
 
       <FilterToggle />
 

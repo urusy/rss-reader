@@ -1,5 +1,5 @@
 import { createResource, createSignal, For, Show } from "solid-js";
-import { A } from "@solidjs/router";
+import { useSearchParams } from "@solidjs/router";
 import { api } from "@/lib/api";
 import { useSelection } from "@/lib/selection";
 import { useApp } from "@/lib/store";
@@ -9,12 +9,19 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
- * 右ペインの記事一覧。URL（useSelection）と store.filter から listArticles の
- * 引数を組み立てて自動再フェッチする。all / feed / folder / 未分類 の全 scope に対応。
+ * 3ペインの中央ペイン。URL（useSelection）と store.filter から listArticles の
+ * 引数を組み立てて自動再フェッチする。行クリックは ?article=<id> を立てて右ペインに
+ * 本文を出すだけ（パス＝scope は保持）。all / feed / folder / 未分類 の全 scope に対応。
  */
 export default function ArticleList() {
   const scope = useSelection();
   const app = useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const selectedId = () =>
+    Array.isArray(searchParams.article)
+      ? searchParams.article[0]
+      : searchParams.article;
 
   const params = () => {
     const s = scope();
@@ -35,6 +42,12 @@ export default function ArticleList() {
   );
   const [marking, setMarking] = createSignal(false);
 
+  // 行選択: ?article を立てて右ペインへ。既読化は本文側の滞在/スクロール起点で行うため、
+  // ここでは楽観的に既読にしない。実既読になったら store.readIds 経由でグレーアウトする。
+  const select = (id: string) => {
+    setSearchParams({ article: id });
+  };
+
   const markAll = async () => {
     setMarking(true);
     try {
@@ -51,7 +64,7 @@ export default function ArticleList() {
   };
 
   return (
-    <div class="space-y-4">
+    <div class="space-y-4 p-4">
       <div class="flex items-center justify-between gap-2">
         <Badge variant={(stats()?.unread ?? 0) > 0 ? "unread" : "default"}>
           未読 {stats()?.unread ?? 0} 件
@@ -81,14 +94,18 @@ export default function ArticleList() {
           <div class="divide-y divide-border">
             <For each={articles()}>
               {(a) => (
-                <A
-                  href={`/articles/${a.id}`}
-                  class="-mx-2 block rounded-md px-2 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <button
+                  type="button"
+                  onClick={() => select(a.id)}
+                  class={cn(
+                    "block w-full rounded-md px-2 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    selectedId() === a.id && "bg-accent",
+                  )}
                 >
                   <p
                     class={cn(
                       "line-clamp-2 text-sm",
-                      a.is_read
+                      a.is_read || app.state.readIds[a.id]
                         ? "font-normal text-muted-foreground"
                         : "font-semibold text-foreground",
                     )}
@@ -105,7 +122,7 @@ export default function ArticleList() {
                       {formatDate(a.published_at!)}
                     </p>
                   </Show>
-                </A>
+                </button>
               )}
             </For>
           </div>

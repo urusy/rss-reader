@@ -106,7 +106,7 @@ export default function FeedManage() {
   };
 
   return (
-    <div class="space-y-6">
+    <div class="mx-auto max-w-3xl space-y-6 px-4 py-6">
       <h1 class="text-2xl font-bold tracking-tight">フィード管理</h1>
 
       <Card>
@@ -180,9 +180,10 @@ export default function FeedManage() {
                       {lastPostLabel(o()?.last_published_at ?? null)} ・{" "}
                       {postsPerWeekLabel(o()?.posts_per_week ?? 0)}
                     </p>
-                    <div class="flex flex-wrap items-center gap-1">
+                    {/* 狭幅では select を1行・ボタン群を下段に縦積み。sm+ で横並び。 */}
+                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-1">
                       <select
-                        class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                        class="h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs pointer-coarse:min-h-11 sm:w-auto"
                         value={feed.folder_id ?? ""}
                         onChange={(e) => assignFolder(feed, e.currentTarget.value)}
                       >
@@ -191,15 +192,17 @@ export default function FeedManage() {
                           {(fl) => <option value={fl.id}>{fl.name}</option>}
                         </For>
                       </select>
-                      <Button size="sm" variant="ghost" onClick={() => renameFeed(feed)}>
-                        改名
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => refreshFeed(feed)}>
-                        再取得
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deleteFeed(feed)}>
-                        削除
-                      </Button>
+                      <div class="flex flex-wrap gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => renameFeed(feed)}>
+                          改名
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => refreshFeed(feed)}>
+                          再取得
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deleteFeed(feed)}>
+                          削除
+                        </Button>
+                      </div>
                     </div>
                   </li>
                 );

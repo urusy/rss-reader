@@ -56,7 +56,8 @@ export function DialogContent(
         <ArkDialog.Content
           class={cn(
             side() === "left"
-              ? "h-full w-72 max-w-[85%] overflow-y-auto rounded-none border-r border-border bg-background p-4 shadow-lg"
+              ? // ドロワーは画面端に接するので safe-area を上/下/左に重ねる（p-4 の 1rem に加算）。
+                "h-full w-72 max-w-[85%] overflow-y-auto rounded-none border-r border-border bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg"
               : "w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg",
             local.class,
           )}

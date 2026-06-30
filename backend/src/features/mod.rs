@@ -4,6 +4,7 @@ pub mod feeds;
 pub mod folders;
 pub mod health;
 pub mod instapaper;
+pub mod search;
 pub mod stats;
 
 use axum::Router;
@@ -25,6 +26,7 @@ pub fn router(state: AppState) -> Router {
         .merge(feed_overview::routes())
         .merge(folders::routes())
         .merge(instapaper::routes())
+        .merge(search::routes())
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive()) // tighten before exposing beyond your LAN
         .with_state(state)
