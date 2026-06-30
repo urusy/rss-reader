@@ -6,11 +6,12 @@ import {
   type Resource,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { api, type Feed, type Folder } from "@/lib/api";
+import { api, type Feed, type Folder, type RelevanceScore } from "@/lib/api";
 
 export interface UiState {
   sidebarOpen: boolean; // モバイルドロワー
   filter: "all" | "unread"; // #11 が使用（すべて/未読トグル）
+  sort: "newest" | "relevance"; // #25 並び順（新着 / 重要度）
   // このセッションで既読化した記事ID。本文ペイン（滞在/スクロール起点）で立て、
   // 一覧ペインが行のグレーアウト判定に使う（兄弟ペインは別 resource なので共有が要る）。
   readIds: Record<string, true>;
@@ -27,6 +28,9 @@ export interface UiStore {
   closeSidebar(): void;
   toggleSidebar(): void;
   setFilter(f: "all" | "unread"): void;
+  setSort(s: "newest" | "relevance"): void; // #25
+  relevanceScores: Resource<RelevanceScore[]>; // #25
+  refetchRelevanceScores(): void; // #25
   markReadLocal(id: string): void; // 本文ペインが実既読の瞬間に呼ぶ
   setNavItems(items: { id: string; url: string }[]): void; // #18
   toggleHelp(): void; // #18
@@ -43,10 +47,15 @@ export const AppProvider: ParentComponent = (props) => {
   const [state, setState] = createStore<UiState>({
     sidebarOpen: false,
     filter: "all",
+    sort: "newest",
     readIds: {},
     navItems: [],
     helpOpen: false,
   });
+  const [relevanceScores, { refetch: refetchRelevanceScores }] = createResource(
+    () => api.listRelevanceScores(),
+    { initialValue: [] },
+  );
   const [feeds, { refetch: refetchFeeds }] = createResource(
     () => api.listFeeds(),
     { initialValue: [] },
@@ -62,6 +71,11 @@ export const AppProvider: ParentComponent = (props) => {
     closeSidebar: () => setState("sidebarOpen", false),
     toggleSidebar: () => setState("sidebarOpen", (v) => !v),
     setFilter: (f) => setState("filter", f),
+    setSort: (s) => setState("sort", s),
+    relevanceScores,
+    refetchRelevanceScores: () => {
+      void refetchRelevanceScores();
+    },
     markReadLocal: (id) => setState("readIds", id, true),
     setNavItems: (items) => setState("navItems", items),
     toggleHelp: () => setState("helpOpen", (v) => !v),

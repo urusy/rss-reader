@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use super::{
-    ChatMessage, ChatRequest, DigestRequest, LlmClient, SuggestTagsRequest, SummarizeRequest,
-    TranslateRequest,
+    ChatMessage, ChatRequest, DigestRequest, LlmClient, ScoreRelevanceRequest, SuggestTagsRequest,
+    SummarizeRequest, TranslateRequest,
 };
 use crate::shared::error::{AppError, AppResult};
 
@@ -151,5 +151,39 @@ impl LlmClient for AnthropicClient {
             req.target_lang
         );
         self.complete(&system, &req.items).await
+    }
+
+    async fn score_relevance(&self, req: ScoreRelevanceRequest) -> AppResult<String> {
+        let system = format!(
+            "You score how relevant unread articles are to a user's interest \
+             profile, so the most worth-reading ones can be surfaced first. \
+             The user's interest profile is:\n{}\n\n\
+             For EACH article below, output an integer relevance score from 0 \
+             (irrelevant) to 100 (highly relevant) and a very short reason. \
+             Respond with ONLY a JSON array, no prose, no code fences, like: \
+             [{{\"id\":\"<uuid>\",\"score\":80,\"reason\":\"matches rust interest\"}}]. \
+             Use the exact id given for each article.",
+            req.profile
+        );
+        let user = req
+            .articles
+            .iter()
+            .map(|a| {
+                let snippet = a.snippet.trim();
+                let snippet = if snippet.chars().count() > 400 {
+                    snippet.chars().take(400).collect::<String>()
+                } else {
+                    snippet.to_string()
+                };
+                format!(
+                    "id: {}\ntitle: {}\nexcerpt: {}",
+                    a.id,
+                    a.title.trim(),
+                    snippet
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        self.complete(&system, &user).await
     }
 }

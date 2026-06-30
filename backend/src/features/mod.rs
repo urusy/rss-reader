@@ -13,6 +13,7 @@ pub mod health;
 pub mod instapaper;
 pub mod mute_rules;
 pub mod opml;
+pub mod relevance;
 pub mod search;
 pub mod stats;
 pub mod tags;
@@ -51,6 +52,7 @@ pub fn router(state: AppState) -> Router {
         .merge(mute_rules::routes())
         .merge(tags::routes())
         .merge(digest::routes())
+        .merge(relevance::routes())
         .merge(backup::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

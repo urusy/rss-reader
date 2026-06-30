@@ -89,6 +89,24 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface RelevanceScore {
+  article_id: string;
+  score: number; // 0.0 .. 1.0
+  reasoning: string | null;
+  scored_at: string;
+}
+export interface ScoreResult {
+  scored_count: number;
+  profile_hash: string;
+  scores: RelevanceScore[];
+}
+export interface RelevanceProfile {
+  profile: string;
+  hash: string;
+  tag_count: number;
+  read_count: number;
+}
+
 export interface Digest {
   date: string;
   markdown: string;
@@ -360,6 +378,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Relevance (#25)
+  listRelevanceScores: () => http<RelevanceScore[]>("/api/relevance/scores"),
+  scoreRelevance: (refresh = false) =>
+    http<ScoreResult>(`/api/relevance/score${refresh ? "?refresh=true" : ""}`, {
+      method: "POST",
+    }),
+  getRelevanceProfile: () => http<RelevanceProfile>("/api/relevance/profile"),
   // Digest (#23)
   getLatestDigest: () => http<Digest>("/api/digest/latest"),
   getDigest: (date: string) =>

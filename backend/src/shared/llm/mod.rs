@@ -59,6 +59,21 @@ pub struct DigestRequest {
     pub target_lang: String,
 }
 
+/// One article to score (provider-agnostic). id is the article UUID string.
+#[derive(Debug, Clone)]
+pub struct ScorableArticle {
+    pub id: String,
+    pub title: String,
+    pub snippet: String,
+}
+
+/// Ask the LLM to score unread articles against an interest profile.
+#[derive(Debug, Clone)]
+pub struct ScoreRelevanceRequest {
+    pub profile: String,
+    pub articles: Vec<ScorableArticle>,
+}
+
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     async fn summarize(&self, req: SummarizeRequest) -> AppResult<String>;
@@ -69,4 +84,6 @@ pub trait LlmClient: Send + Sync {
     async fn suggest_tags(&self, req: SuggestTagsRequest) -> AppResult<String>;
     /// Daily digest: topic-grouped Markdown from a list of articles.
     async fn digest(&self, req: DigestRequest) -> AppResult<String>;
+    /// Relevance scoring. Returns a JSON array string (caller parses it).
+    async fn score_relevance(&self, req: ScoreRelevanceRequest) -> AppResult<String>;
 }
