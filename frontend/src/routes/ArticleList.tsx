@@ -113,11 +113,11 @@ export default function ArticleList() {
 
   return (
     <div class="space-y-4 p-4">
-      <div class="flex items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <Badge variant={(stats()?.unread ?? 0) > 0 ? "unread" : "default"}>
           未読 {stats()?.unread ?? 0} 件
         </Badge>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <Button
             size="sm"
             variant={app.state.sort === "relevance" ? "default" : "outline"}
