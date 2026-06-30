@@ -89,6 +89,22 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface QuerySpec {
+  text?: string;
+  feed_id?: string;
+  folder_id?: string;
+  unclassified?: boolean;
+  unread_only?: boolean;
+  tag_ids?: string[];
+}
+export interface SavedView {
+  id: string;
+  name: string;
+  query: QuerySpec;
+  position: number;
+  created_at: string;
+}
+
 export interface Cluster {
   id: string;
   title: string;
@@ -401,6 +417,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Smart views (#27)
+  listSavedViews: () => http<SavedView[]>("/api/saved-views"),
+  getSavedView: (id: string) => http<SavedView>(`/api/saved-views/${id}`),
+  createSavedView: (body: { name: string; query: QuerySpec; position?: number }) =>
+    http<SavedView>("/api/saved-views", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateSavedView: (
+    id: string,
+    body: { name: string; query: QuerySpec; position?: number },
+  ) =>
+    http<SavedView>(`/api/saved-views/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteSavedView: (id: string) =>
+    http<void>(`/api/saved-views/${id}`, { method: "DELETE" }),
+  resolveSavedView: (id: string, unread?: boolean) =>
+    http<Article[]>(
+      `/api/saved-views/${id}/articles${unread ? "?unread=true" : ""}`,
+    ),
   // Clustering (#26)
   listClusters: () => http<ClusterWithMembers[]>("/api/clusters"),
   getCluster: (id: string) => http<ClusterWithMembers>(`/api/clusters/${id}`),

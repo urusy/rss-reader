@@ -6,7 +6,13 @@ import {
   type Resource,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { api, type Feed, type Folder, type RelevanceScore } from "@/lib/api";
+import {
+  api,
+  type Feed,
+  type Folder,
+  type RelevanceScore,
+  type SavedView,
+} from "@/lib/api";
 
 export interface UiState {
   sidebarOpen: boolean; // モバイルドロワー
@@ -39,6 +45,8 @@ export interface UiStore {
   folders: Resource<Folder[]>;
   refetchFeeds(): void; // フィード追加後などに呼ぶ
   refetchFolders(): void;
+  savedViews: Resource<SavedView[]>; // #27 スマートビュー
+  refetchSavedViews(): void;
 }
 
 const Ctx = createContext<UiStore>();
@@ -64,6 +72,10 @@ export const AppProvider: ParentComponent = (props) => {
     () => api.listFolders(),
     { initialValue: [] },
   );
+  const [savedViews, { refetch: refetchSavedViews }] = createResource(
+    () => api.listSavedViews(),
+    { initialValue: [] },
+  );
 
   const store: UiStore = {
     state,
@@ -87,6 +99,10 @@ export const AppProvider: ParentComponent = (props) => {
     },
     refetchFolders: () => {
       void refetchFolders();
+    },
+    savedViews,
+    refetchSavedViews: () => {
+      void refetchSavedViews();
     },
   };
   return <Ctx.Provider value={store}>{props.children}</Ctx.Provider>;

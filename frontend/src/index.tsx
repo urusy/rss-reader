@@ -22,7 +22,7 @@ render(
   () => (
     <Router root={App}>
       <Route
-        path={["/", "/feeds/:feedId", "/folders/:folderId"]}
+        path={["/", "/feeds/:feedId", "/folders/:folderId", "/views/:viewId"]}
         component={Reader}
       />
       <Route path="/articles/:id" component={ArticleView} />

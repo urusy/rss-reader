@@ -30,20 +30,23 @@ export default function ArticleList() {
       ? searchParams.article[0]
       : searchParams.article;
 
-  const params = () => {
-    const s = scope();
-    const unread = app.state.filter === "unread" ? true : undefined;
-    if (s.kind === "feed") return { feed_id: s.feedId, unread };
+  // scope と未読フィルタを依存にしたソース。view scope のときだけ resolver を呼ぶ。
+  const source = () => ({
+    s: scope(),
+    unread: app.state.filter === "unread" ? true : undefined,
+  });
+
+  const [articles, { refetch }] = createResource(source, async ({ s, unread }) => {
+    if (s.kind === "view")
+      return api.resolveSavedView(s.viewId, unread || undefined);
+    if (s.kind === "feed")
+      return api.listArticles({ feed_id: s.feedId, unread });
     if (s.kind === "folder")
       return s.folderId === "unclassified"
-        ? { unclassified: true, unread }
-        : { folder_id: s.folderId, unread };
-    return { unread };
-  };
-
-  const [articles, { refetch }] = createResource(params, (p) =>
-    api.listArticles(p),
-  );
+        ? api.listArticles({ unclassified: true, unread })
+        : api.listArticles({ folder_id: s.folderId, unread });
+    return api.listArticles({ unread });
+  });
   const [stats, { refetch: refetchStats }] = createResource(() =>
     api.getStats(),
   );
@@ -130,18 +133,20 @@ export default function ArticleList() {
           <Button size="sm" variant="outline" onClick={runScoring} disabled={scoring()}>
             {scoring() ? "スコア中…" : "スコアリング"}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={markAll}
-            disabled={marking() || (articles()?.length ?? 0) === 0}
-          >
-            {marking()
-              ? "既読化中…"
-              : scope().kind === "feed"
-                ? "このフィードを既読"
-                : "すべて既読"}
-          </Button>
+          <Show when={scope().kind !== "view"}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={markAll}
+              disabled={marking() || (articles()?.length ?? 0) === 0}
+            >
+              {marking()
+                ? "既読化中…"
+                : scope().kind === "feed"
+                  ? "このフィードを既読"
+                  : "すべて既読"}
+            </Button>
+          </Show>
         </div>
       </div>
 

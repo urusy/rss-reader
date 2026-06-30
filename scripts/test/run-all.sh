@@ -19,6 +19,7 @@ scripts=(
   api-folders.sh
   api-instapaper.sh
   api-search.sh
+  api-saved-views.sh
   api-ask.sh
   api-tags.sh
   api-digest.sh

@@ -28,4 +28,10 @@ describe("scopeFromPath", () => {
   it("不明パスは all にフォールバック", () => {
     expect(scopeFromPath("/manage", {})).toEqual({ kind: "all" });
   });
+  it("/views/:viewId は view scope（#27）", () => {
+    expect(scopeFromPath("/views/v1", { viewId: "v1" })).toEqual({
+      kind: "view",
+      viewId: "v1",
+    });
+  });
 });
