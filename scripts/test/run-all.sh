@@ -13,6 +13,7 @@ scripts=(
   api-auth.sh
   api-stats.sh
   api-feeds.sh
+  api-feeds-discover.sh
   api-feed-overview.sh
   api-folders.sh
   api-instapaper.sh

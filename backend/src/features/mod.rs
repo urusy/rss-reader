@@ -2,6 +2,7 @@ pub mod articles;
 pub mod auth;
 pub mod backup;
 pub mod extraction;
+pub mod feed_discovery;
 pub mod feed_overview;
 pub mod feeds;
 pub mod folders;
@@ -32,6 +33,7 @@ pub fn router(state: AppState) -> Router {
 
     let protected = Router::new()
         .merge(feeds::routes())
+        .merge(feed_discovery::routes())
         .merge(articles::routes())
         .merge(extraction::routes())
         .merge(stats::routes())

@@ -89,6 +89,13 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface DiscoveredFeed {
+  url: string;
+  title: string | null;
+  kind: "rss" | "atom" | "json" | "unknown";
+  already_subscribed: boolean;
+}
+
 export interface MuteRule {
   id: string;
   field: "title" | "content" | "url";
@@ -158,6 +165,12 @@ export const api = {
   listFeeds: () => http<Feed[]>("/api/feeds"),
   addFeed: (url: string) =>
     http<Feed>("/api/feeds", { method: "POST", body: JSON.stringify({ url }) }),
+  // サイト/記事 URL からフィード候補を検出（購読はしない。選択後 addFeed を呼ぶ）。#20
+  discoverFeeds: (url: string) =>
+    http<{ candidates: DiscoveredFeed[] }>("/api/feeds/discover", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
   deleteFeed: (id: string) => http<void>(`/api/feeds/${id}`, { method: "DELETE" }),
   listFeedOverview: () => http<FeedOverview[]>("/api/feeds/overview"),
 
