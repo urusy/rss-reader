@@ -21,6 +21,7 @@ scripts=(
   api-search.sh
   api-saved-views.sh
   api-rules.sh
+  api-annotations.sh
   api-ask.sh
   api-tags.sh
   api-digest.sh

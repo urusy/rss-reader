@@ -231,6 +231,26 @@ export interface NotesResponse {
   messages: AskMessage[];
 }
 
+export interface Highlight {
+  id: string;
+  article_id: string;
+  quote: string;
+  note: string | null;
+  start_offset: number | null;
+  end_offset: number | null;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewHighlight {
+  quote: string;
+  note?: string;
+  start_offset?: number;
+  end_offset?: number;
+  color?: string;
+}
+
 export interface FeedHealth {
   feed_id: string;
   last_fetch_status: "ok" | "error" | null;
@@ -582,6 +602,26 @@ export const api = {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
     return res.json();
   },
+  // --- スター + ハイライト / 注釈（#32。ローカル知識ベース・外部同期しない） ---
+  // 星付き記事 id 一覧（新しい順）。一覧の「星付きだけ」絞り込みに使う。
+  listStars: () => http<string[]>("/api/stars"),
+  addStar: (id: string) => http<void>(`/api/articles/${id}/star`, { method: "PUT" }),
+  removeStar: (id: string) =>
+    http<void>(`/api/articles/${id}/star`, { method: "DELETE" }),
+  getHighlights: (id: string) =>
+    http<Highlight[]>(`/api/articles/${id}/highlights`),
+  createHighlight: (id: string, body: NewHighlight) =>
+    http<Highlight>(`/api/articles/${id}/highlights`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateHighlight: (hid: string, body: { note?: string; color?: string }) =>
+    http<Highlight>(`/api/highlights/${hid}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteHighlight: (hid: string) =>
+    http<void>(`/api/highlights/${hid}`, { method: "DELETE" }),
   // ゲート要否（公開エンドポイント。トークン無しでも 200）。
   getAuthStatus: () => http<AuthStatus>("/api/auth/status"),
   // トークン検証（保存前/起動時チェック）。不一致は 401 を throw。

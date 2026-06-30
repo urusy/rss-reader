@@ -1,3 +1,4 @@
+pub mod annotations;
 pub mod articles;
 pub mod ask;
 pub mod auth;
@@ -43,6 +44,7 @@ pub fn router(state: AppState) -> Router {
         .merge(feeds::routes())
         .merge(feed_discovery::routes())
         .merge(articles::routes())
+        .merge(annotations::routes())
         .merge(ask::routes())
         .merge(extraction::routes())
         .merge(stats::routes())

@@ -16,6 +16,7 @@ import {
 } from "@/lib/read-trigger";
 import { Button } from "@/components/ui/button";
 import ArticleAsk from "@/components/article/ArticleAsk";
+import { StarToggle, Highlights } from "@/components/article/Annotations";
 import TagEditor from "@/components/TagEditor";
 
 /**
@@ -158,7 +159,8 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             </a>
           </header>
 
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
+            <StarToggle articleId={a().id} />
             <Button size="sm" onClick={() => run("summarize")} disabled={busy() !== null}>
               {busy() === "summarize" ? "要約中…" : "要約 (Claude)"}
             </Button>
@@ -247,6 +249,9 @@ export default function ArticleDetail(props: { id: string | undefined }) {
 
           {/* タグ編集 + AI 提案（#24） */}
           <TagEditor articleId={a().id} />
+
+          {/* ハイライト / 注釈（#32）: 本文選択 → quote 保存 + メモ */}
+          <Highlights articleId={a().id} />
 
           {/* Ask Claude（#22）: 記事本文を context にした対話 Q&A */}
           <ArticleAsk articleId={a().id} />
