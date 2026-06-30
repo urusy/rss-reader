@@ -3,8 +3,9 @@ import { render } from "solid-js/web";
 import { Router, Route } from "@solidjs/router";
 import "./app.css";
 import App from "./App";
-import ArticleList from "./routes/ArticleList";
+import Reader from "./routes/Reader";
 import ArticleView from "./routes/ArticleView";
+import Search from "./routes/Search";
 import Settings from "./routes/Settings";
 import FeedManage from "./routes/FeedManage";
 import NotFound from "./routes/NotFound";
@@ -20,9 +21,10 @@ render(
     <Router root={App}>
       <Route
         path={["/", "/feeds/:feedId", "/folders/:folderId"]}
-        component={ArticleList}
+        component={Reader}
       />
       <Route path="/articles/:id" component={ArticleView} />
+      <Route path="/search" component={Search} />
       <Route path="/manage" component={FeedManage} />
       <Route path="/settings" component={Settings} />
       <Route path="*" component={NotFound} />

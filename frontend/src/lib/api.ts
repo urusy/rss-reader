@@ -122,6 +122,12 @@ export const api = {
     const qs = q.toString();
     return http<Article[]>(`/api/articles${qs ? `?${qs}` : ""}`);
   },
+  // 全文検索（title/content の部分一致, pg_trgm）。q は呼び出し側で trim 済みを渡す。
+  searchArticles: (q: string, limit?: number) => {
+    const params = new URLSearchParams({ q });
+    if (limit != null) params.set("limit", String(limit));
+    return http<Article[]>(`/api/search?${params.toString()}`);
+  },
   getArticle: (id: string) => http<Article>(`/api/articles/${id}`),
   markRead: (id: string, read = true) =>
     http<void>(`/api/articles/${id}/read`, {

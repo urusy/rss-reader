@@ -11,6 +11,9 @@ import { api, type Feed, type Folder } from "@/lib/api";
 export interface UiState {
   sidebarOpen: boolean; // モバイルドロワー
   filter: "all" | "unread"; // #11 が使用（すべて/未読トグル）
+  // このセッションで既読化した記事ID。本文ペイン（滞在/スクロール起点）で立て、
+  // 一覧ペインが行のグレーアウト判定に使う（兄弟ペインは別 resource なので共有が要る）。
+  readIds: Record<string, true>;
 }
 
 export interface UiStore {
@@ -19,6 +22,7 @@ export interface UiStore {
   closeSidebar(): void;
   toggleSidebar(): void;
   setFilter(f: "all" | "unread"): void;
+  markReadLocal(id: string): void; // 本文ペインが実既読の瞬間に呼ぶ
   feeds: Resource<Feed[]>; // Sidebar が2箇所で共有する単一リソース
   folders: Resource<Folder[]>;
   refetchFeeds(): void; // フィード追加後などに呼ぶ
@@ -31,6 +35,7 @@ export const AppProvider: ParentComponent = (props) => {
   const [state, setState] = createStore<UiState>({
     sidebarOpen: false,
     filter: "all",
+    readIds: {},
   });
   const [feeds, { refetch: refetchFeeds }] = createResource(
     () => api.listFeeds(),
@@ -47,6 +52,7 @@ export const AppProvider: ParentComponent = (props) => {
     closeSidebar: () => setState("sidebarOpen", false),
     toggleSidebar: () => setState("sidebarOpen", (v) => !v),
     setFilter: (f) => setState("filter", f),
+    markReadLocal: (id) => setState("readIds", id, true),
     feeds,
     folders,
     refetchFeeds: () => {
