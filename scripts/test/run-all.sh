@@ -23,6 +23,7 @@ scripts=(
   api-tags.sh
   api-digest.sh
   api-relevance.sh
+  api-clustering.sh
   api-extraction.sh
   api-opml.sh
   api-mute-rules.sh

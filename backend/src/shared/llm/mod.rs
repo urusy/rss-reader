@@ -74,6 +74,14 @@ pub struct ScoreRelevanceRequest {
     pub articles: Vec<ScorableArticle>,
 }
 
+/// Ask the LLM for an integrated cross-outlet summary of one cluster.
+#[derive(Debug, Clone)]
+pub struct ClusterSummaryRequest {
+    /// Per-outlet article list (built by build_cluster_summary_input).
+    pub items: String,
+    pub target_lang: String,
+}
+
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     async fn summarize(&self, req: SummarizeRequest) -> AppResult<String>;
@@ -86,4 +94,6 @@ pub trait LlmClient: Send + Sync {
     async fn digest(&self, req: DigestRequest) -> AppResult<String>;
     /// Relevance scoring. Returns a JSON array string (caller parses it).
     async fn score_relevance(&self, req: ScoreRelevanceRequest) -> AppResult<String>;
+    /// Integrated cross-outlet summary of a cluster (plain text).
+    async fn cluster_summary(&self, req: ClusterSummaryRequest) -> AppResult<String>;
 }

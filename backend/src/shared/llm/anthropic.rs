@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use super::{
-    ChatMessage, ChatRequest, DigestRequest, LlmClient, ScoreRelevanceRequest, SuggestTagsRequest,
-    SummarizeRequest, TranslateRequest,
+    ChatMessage, ChatRequest, ClusterSummaryRequest, DigestRequest, LlmClient,
+    ScoreRelevanceRequest, SuggestTagsRequest, SummarizeRequest, TranslateRequest,
 };
 use crate::shared::error::{AppError, AppResult};
 
@@ -185,5 +185,17 @@ impl LlmClient for AnthropicClient {
             .collect::<Vec<_>>()
             .join("\n---\n");
         self.complete(&system, &user).await
+    }
+
+    async fn cluster_summary(&self, req: ClusterSummaryRequest) -> AppResult<String> {
+        let system = format!(
+            "You are a news analyst. The following articles from different outlets \
+             cover the SAME story. Write an integrated summary in {} that (1) states \
+             the shared facts in 2-3 sentences, then (2) explicitly contrasts how the \
+             outlets differ in framing, emphasis, or tone (use a short bulleted list, \
+             naming each outlet). Be concise and neutral. Output only the summary.",
+            req.target_lang
+        );
+        self.complete(&system, &req.items).await
     }
 }

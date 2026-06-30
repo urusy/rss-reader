@@ -36,6 +36,9 @@ services:
       DIGEST_ENABLED: ${DIGEST_ENABLED:-}
       DIGEST_HOUR_UTC: ${DIGEST_HOUR_UTC:-}
       DIGEST_LANG: ${DIGEST_LANG:-}
+      # Semantic clustering (#26). Off unless CLUSTERING_ENABLED=true.
+      CLUSTERING_ENABLED: ${CLUSTERING_ENABLED:-}
+      CLUSTERING_INTERVAL_SECS: ${CLUSTERING_INTERVAL_SECS:-}
       RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
     depends_on:
       db:

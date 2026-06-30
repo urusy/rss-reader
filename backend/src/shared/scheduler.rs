@@ -5,6 +5,7 @@ use tokio::time::{interval, MissedTickBehavior};
 use chrono::{Timelike, Utc};
 
 use super::state::AppState;
+use crate::features::clustering;
 use crate::features::digest;
 use crate::features::feeds;
 use crate::features::mute_rules;
@@ -53,6 +54,28 @@ pub fn spawn_digest(state: AppState) {
                 if let Err(e) = digest::service::ensure_today(&state).await {
                     tracing::error!(error = %e, "daily digest generation failed");
                 }
+            }
+        }
+    });
+}
+
+/// Re-clustering loop (#26). Trigram-only (no LLM), cheap to run often. No-op
+/// unless CLUSTERING_ENABLED=true.
+pub fn spawn_clustering(state: AppState) {
+    if !state.config.clustering_enabled {
+        tracing::info!("clustering disabled (CLUSTERING_ENABLED is not true)");
+        return;
+    }
+    let period = Duration::from_secs(state.config.clustering_interval_secs);
+    tokio::spawn(async move {
+        let mut ticker = interval(period);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            match clustering::service::recluster(&state).await {
+                Ok(n) => tracing::info!(clusters = n, "re-clustering done"),
+                Err(e) => tracing::error!(error = %e, "re-clustering failed"),
             }
         }
     });

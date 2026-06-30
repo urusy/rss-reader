@@ -89,6 +89,29 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface Cluster {
+  id: string;
+  title: string;
+  size: number;
+  summary: string | null;
+  summary_lang: string | null;
+  created_at: string;
+}
+export interface ClusterMember {
+  cluster_id: string;
+  article_id: string;
+  title: string;
+  url: string;
+  feed_id: string;
+  feed_title: string | null;
+  is_representative: boolean;
+  is_duplicate: boolean;
+  similarity: number;
+}
+export interface ClusterWithMembers extends Cluster {
+  members: ClusterMember[];
+}
+
 export interface RelevanceScore {
   article_id: string;
   score: number; // 0.0 .. 1.0
@@ -378,6 +401,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Clustering (#26)
+  listClusters: () => http<ClusterWithMembers[]>("/api/clusters"),
+  getCluster: (id: string) => http<ClusterWithMembers>(`/api/clusters/${id}`),
+  summarizeCluster: (id: string, targetLang?: string) =>
+    http<Cluster>(`/api/clusters/${id}/summary`, {
+      method: "POST",
+      body: JSON.stringify(targetLang ? { target_lang: targetLang } : {}),
+    }),
+  reclusterNow: () =>
+    http<{ clusters: number }>("/api/clusters/recluster", { method: "POST" }),
   // Relevance (#25)
   listRelevanceScores: () => http<RelevanceScore[]>("/api/relevance/scores"),
   scoreRelevance: (refresh = false) =>

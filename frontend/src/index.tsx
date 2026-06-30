@@ -9,6 +9,7 @@ import Search from "./routes/Search";
 import Settings from "./routes/Settings";
 import FeedManage from "./routes/FeedManage";
 import Digest from "./routes/Digest";
+import Clusters from "./routes/Clusters";
 import NotFound from "./routes/NotFound";
 import { initTheme } from "./lib/theme";
 
@@ -28,6 +29,7 @@ render(
       <Route path="/search" component={Search} />
       <Route path="/manage" component={FeedManage} />
       <Route path="/digest" component={Digest} />
+      <Route path="/clusters" component={Clusters} />
       <Route path="/settings" component={Settings} />
       <Route path="*" component={NotFound} />
     </Router>

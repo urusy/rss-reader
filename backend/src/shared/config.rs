@@ -41,6 +41,15 @@ pub struct AppConfig {
     pub smtp_password: Option<String>,
     pub digest_email_from: Option<String>,
     pub digest_email_to: Option<String>,
+    /// Semantic clustering (#26): enable the scheduled re-clustering loop.
+    pub clustering_enabled: bool,
+    pub clustering_interval_secs: u64,
+    pub clustering_window_hours: i32,
+    pub clustering_max_articles: i32,
+    pub cluster_topic_threshold: f32,
+    pub cluster_dup_threshold: f32,
+    pub cluster_min_size: i32,
+    pub cluster_summary_lang: String,
 }
 
 impl AppConfig {
@@ -115,6 +124,37 @@ impl AppConfig {
             .ok()
             .filter(|v| !v.is_empty());
 
+        let clustering_enabled = std::env::var("CLUSTERING_ENABLED")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let clustering_interval_secs = std::env::var("CLUSTERING_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3600);
+        let clustering_window_hours = std::env::var("CLUSTERING_WINDOW_HOURS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(48);
+        let clustering_max_articles = std::env::var("CLUSTERING_MAX_ARTICLES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(500);
+        let cluster_topic_threshold = std::env::var("CLUSTER_TOPIC_THRESHOLD")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.3_f32);
+        let cluster_dup_threshold = std::env::var("CLUSTER_DUP_THRESHOLD")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.6_f32);
+        let cluster_min_size = std::env::var("CLUSTER_MIN_SIZE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2);
+        let cluster_summary_lang =
+            std::env::var("CLUSTER_SUMMARY_LANG").unwrap_or_else(|_| "ja".to_string());
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -137,6 +177,14 @@ impl AppConfig {
             smtp_password,
             digest_email_from,
             digest_email_to,
+            clustering_enabled,
+            clustering_interval_secs,
+            clustering_window_hours,
+            clustering_max_articles,
+            cluster_topic_threshold,
+            cluster_dup_threshold,
+            cluster_min_size,
+            cluster_summary_lang,
         })
     }
 
@@ -166,6 +214,14 @@ impl AppConfig {
             smtp_password: None,
             digest_email_from: None,
             digest_email_to: None,
+            clustering_enabled: false,
+            clustering_interval_secs: 3600,
+            clustering_window_hours: 48,
+            clustering_max_articles: 500,
+            cluster_topic_threshold: 0.3,
+            cluster_dup_threshold: 0.6,
+            cluster_min_size: 2,
+            cluster_summary_lang: "ja".to_string(),
         }
     }
 }

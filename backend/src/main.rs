@@ -44,6 +44,8 @@ async fn main() -> anyhow::Result<()> {
     features::backup::service::spawn_pgdump_scheduler(state.clone());
     // Optional daily AI digest (no-op unless DIGEST_ENABLED=true).
     scheduler::spawn_digest(state.clone());
+    // Optional periodic re-clustering (no-op unless CLUSTERING_ENABLED=true).
+    scheduler::spawn_clustering(state.clone());
 
     let app = features::router(state.clone());
 
