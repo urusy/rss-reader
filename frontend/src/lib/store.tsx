@@ -14,6 +14,11 @@ export interface UiState {
   // このセッションで既読化した記事ID。本文ペイン（滞在/スクロール起点）で立て、
   // 一覧ペインが行のグレーアウト判定に使う（兄弟ペインは別 resource なので共有が要る）。
   readIds: Record<string, true>;
+  // 中央一覧の現在の表示順（ArticleList が書き、キーボードハンドラが j/k/o/Enter で読む）。
+  // o（原文）のため url も持つ。readIds と同型の兄弟ペイン間共有。#18
+  navItems: { id: string; url: string }[];
+  // ? のチートシート overlay 開閉。#18
+  helpOpen: boolean;
 }
 
 export interface UiStore {
@@ -23,6 +28,9 @@ export interface UiStore {
   toggleSidebar(): void;
   setFilter(f: "all" | "unread"): void;
   markReadLocal(id: string): void; // 本文ペインが実既読の瞬間に呼ぶ
+  setNavItems(items: { id: string; url: string }[]): void; // #18
+  toggleHelp(): void; // #18
+  closeHelp(): void; // #18
   feeds: Resource<Feed[]>; // Sidebar が2箇所で共有する単一リソース
   folders: Resource<Folder[]>;
   refetchFeeds(): void; // フィード追加後などに呼ぶ
@@ -36,6 +44,8 @@ export const AppProvider: ParentComponent = (props) => {
     sidebarOpen: false,
     filter: "all",
     readIds: {},
+    navItems: [],
+    helpOpen: false,
   });
   const [feeds, { refetch: refetchFeeds }] = createResource(
     () => api.listFeeds(),
@@ -53,6 +63,9 @@ export const AppProvider: ParentComponent = (props) => {
     toggleSidebar: () => setState("sidebarOpen", (v) => !v),
     setFilter: (f) => setState("filter", f),
     markReadLocal: (id) => setState("readIds", id, true),
+    setNavItems: (items) => setState("navItems", items),
+    toggleHelp: () => setState("helpOpen", (v) => !v),
+    closeHelp: () => setState("helpOpen", false),
     feeds,
     folders,
     refetchFeeds: () => {

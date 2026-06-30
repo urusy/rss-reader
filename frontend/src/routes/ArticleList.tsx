@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createEffect, createResource, createSignal, For, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { api } from "@/lib/api";
 import { useSelection } from "@/lib/selection";
@@ -41,6 +41,11 @@ export default function ArticleList() {
     api.getStats(),
   );
   const [marking, setMarking] = createSignal(false);
+
+  // 現在の表示順を store に公開（キーボード j/k/o/Enter の移動対象。#18）。
+  createEffect(() => {
+    app.setNavItems((articles() ?? []).map((a) => ({ id: a.id, url: a.url })));
+  });
 
   // 行選択: ?article を立てて右ペインへ。既読化は本文側の滞在/スクロール起点で行うため、
   // ここでは楽観的に既読にしない。実既読になったら store.readIds 経由でグレーアウトする。

@@ -5,6 +5,14 @@ import MobileTopBar from "@/components/layout/MobileTopBar";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { createResizableWidth } from "@/lib/resizable";
 import LoginGate from "@/components/auth/LoginGate";
+import { useKeyboardShortcuts } from "@/lib/keyboard";
+import KeyboardHelp from "@/components/keyboard/KeyboardHelp";
+
+/** AppProvider 配下で keydown を起動し、? のチートシートを描画する（#18）。 */
+function KeyboardShortcuts() {
+  useKeyboardShortcuts();
+  return <KeyboardHelp />;
+}
 
 /** 二ペインのアプリシェル。左 Sidebar（永続・幅調節可）+ 右ペイン（一覧 or 本文）。 */
 const App: ParentComponent = (props) => {
@@ -18,6 +26,7 @@ const App: ParentComponent = (props) => {
 
   return (
     <AppProvider>
+      <KeyboardShortcuts />
       <LoginGate>
         <div
           class="relative min-h-dvh bg-background text-foreground lg:grid lg:grid-cols-[var(--sidebar-w)_1fr]"
