@@ -89,6 +89,52 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export type Combinator = "all" | "any";
+export type KeywordTarget = "title" | "content" | "any";
+export type DateOp = "older_than_days" | "newer_than_days";
+export type Condition =
+  | {
+      field: "keyword";
+      target: KeywordTarget;
+      value: string;
+      case_sensitive?: boolean;
+    }
+  | { field: "author"; value: string }
+  | { field: "feed"; feed_ids: string[] }
+  | { field: "tag"; tag: string }
+  | { field: "date"; op: DateOp; days: number };
+export type RuleAction =
+  | { kind: "mark_read" }
+  | { kind: "star" }
+  | { kind: "tag"; name: string }
+  | { kind: "save" }
+  | { kind: "score"; delta: number };
+export interface Conditions {
+  combinator: Combinator;
+  items: Condition[];
+}
+export interface Rule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  position: number;
+  conditions: Conditions;
+  actions: RuleAction[];
+  created_at: string;
+  updated_at: string;
+}
+export interface RuleInput {
+  name: string;
+  enabled?: boolean;
+  position?: number;
+  conditions: Conditions;
+  actions: RuleAction[];
+}
+export interface RuleTestResult {
+  matched_count: number;
+  matched_ids: string[];
+}
+
 export interface QuerySpec {
   text?: string;
   feed_id?: string;
@@ -417,6 +463,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Rules engine (#28)
+  listRules: () => http<Rule[]>("/api/rules"),
+  getRule: (id: string) => http<Rule>(`/api/rules/${id}`),
+  createRule: (input: RuleInput) =>
+    http<Rule>("/api/rules", { method: "POST", body: JSON.stringify(input) }),
+  updateRule: (id: string, input: RuleInput) =>
+    http<Rule>(`/api/rules/${id}`, { method: "PUT", body: JSON.stringify(input) }),
+  deleteRule: (id: string) => http<void>(`/api/rules/${id}`, { method: "DELETE" }),
+  testRule: (id: string) =>
+    http<RuleTestResult>(`/api/rules/${id}/test`, { method: "POST" }),
+  applyRules: () =>
+    http<{ processed: number }>("/api/rules/apply", { method: "POST" }),
   // Smart views (#27)
   listSavedViews: () => http<SavedView[]>("/api/saved-views"),
   getSavedView: (id: string) => http<SavedView>(`/api/saved-views/${id}`),

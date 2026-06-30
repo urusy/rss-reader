@@ -148,6 +148,13 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
         )
         .await?;
 
+        // #28: persist the author so rule conditions can match it (best-effort).
+        if let Some(author) = entry.authors.first().map(|p| p.name.clone()) {
+            if !author.trim().is_empty() {
+                let _ = articles::repository::set_author(&state.db, &url, &author).await;
+            }
+        }
+
         // Optional crawl-time full-content extraction (EXTRACT_ON_CRAWL=true).
         // Best-effort + idempotent (skips already-extracted rows). Default off,
         // so behavior is unchanged unless explicitly opted in.
@@ -159,5 +166,12 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
     }
 
     repository::touch_fetched(&state.db, feed.id, feed_title.as_deref()).await?;
+    // #28: apply automation rules to the freshly ingested articles (best-effort;
+    // a failure here must not fail the crawl).
+    if let Err(e) =
+        crate::features::automation_rules::service::apply_for_feed(state, feed.id.0).await
+    {
+        tracing::error!(error = %e, feed = %feed.url, "rule application failed");
+    }
     Ok(())
 }

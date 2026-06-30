@@ -10,6 +10,7 @@ import Settings from "./routes/Settings";
 import FeedManage from "./routes/FeedManage";
 import Digest from "./routes/Digest";
 import Clusters from "./routes/Clusters";
+import Rules from "./routes/Rules";
 import NotFound from "./routes/NotFound";
 import { initTheme } from "./lib/theme";
 
@@ -30,6 +31,7 @@ render(
       <Route path="/manage" component={FeedManage} />
       <Route path="/digest" component={Digest} />
       <Route path="/clusters" component={Clusters} />
+      <Route path="/rules" component={Rules} />
       <Route path="/settings" component={Settings} />
       <Route path="*" component={NotFound} />
     </Router>

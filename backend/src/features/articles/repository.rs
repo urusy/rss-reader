@@ -158,6 +158,17 @@ pub async fn save_full_content(pool: &PgPool, id: ArticleId, full_content: &str)
     Ok(())
 }
 
+/// Set an article's author by url, only when not already set (crawl populates it
+/// for the rules engine #28; additive, same articles aggregate).
+pub async fn set_author(pool: &PgPool, url: &str, author: &str) -> AppResult<()> {
+    sqlx::query("UPDATE articles SET author = $2 WHERE url = $1 AND author IS NULL")
+        .bind(url)
+        .bind(author)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// Look up an article id by its (unique) url. Used by crawl-time auto-extraction
 /// since `upsert` does not return the id.
 pub async fn id_by_url(pool: &PgPool, url: &str) -> AppResult<Option<ArticleId>> {

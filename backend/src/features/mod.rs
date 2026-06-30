@@ -1,6 +1,7 @@
 pub mod articles;
 pub mod ask;
 pub mod auth;
+pub mod automation_rules;
 pub mod backup;
 pub mod clustering;
 pub mod digest;
@@ -57,6 +58,7 @@ pub fn router(state: AppState) -> Router {
         .merge(digest::routes())
         .merge(relevance::routes())
         .merge(clustering::routes())
+        .merge(automation_rules::routes())
         .merge(backup::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
