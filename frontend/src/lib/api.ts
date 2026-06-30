@@ -89,6 +89,26 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+  source: "user" | "ai";
+  created_at: string;
+  article_count?: number;
+}
+export interface ArticleTag {
+  id: string;
+  name: string;
+  color: string | null;
+  attached_source: "user" | "ai";
+  confidence: number | null;
+}
+export interface TagSuggestion {
+  name: string;
+  confidence: number | null;
+}
+
 export interface AskMessage {
   role: "user" | "assistant";
   content: string;
@@ -332,6 +352,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Tags (#24)
+  listTags: () => http<Tag[]>("/api/tags"),
+  createTag: (body: { name: string; color?: string }) =>
+    http<Tag>("/api/tags", { method: "POST", body: JSON.stringify(body) }),
+  updateTag: (id: string, body: { name: string; color?: string }) =>
+    http<Tag>(`/api/tags/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTag: (id: string) => http<void>(`/api/tags/${id}`, { method: "DELETE" }),
+  getArticleTags: (articleId: string) =>
+    http<ArticleTag[]>(`/api/articles/${articleId}/tags`),
+  setArticleTags: (articleId: string, tagIds: string[]) =>
+    http<ArticleTag[]>(`/api/articles/${articleId}/tags`, {
+      method: "PUT",
+      body: JSON.stringify({ tag_ids: tagIds }),
+    }),
+  detachArticleTag: (articleId: string, tagId: string) =>
+    http<void>(`/api/articles/${articleId}/tags/${tagId}`, { method: "DELETE" }),
+  suggestTags: (articleId: string, refresh = false) =>
+    http<TagSuggestion[]>(
+      `/api/articles/${articleId}/suggest-tags${refresh ? "?refresh=true" : ""}`,
+      { method: "POST" },
+    ),
   // Ask Claude (#22): 単一記事への対話 Q&A。messages は user で始まり user で終わる。
   askArticle: (id: string, messages: AskMessage[], save = false) =>
     http<AskResponse>(`/api/articles/${id}/ask`, {

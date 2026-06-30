@@ -14,6 +14,7 @@ pub mod mute_rules;
 pub mod opml;
 pub mod search;
 pub mod stats;
+pub mod tags;
 
 use axum::{middleware, Router};
 use tower_http::cors::CorsLayer;
@@ -47,6 +48,7 @@ pub fn router(state: AppState) -> Router {
         .merge(search::routes())
         .merge(opml::routes())
         .merge(mute_rules::routes())
+        .merge(tags::routes())
         .merge(backup::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

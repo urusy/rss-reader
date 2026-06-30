@@ -6,7 +6,9 @@
 use async_trait::async_trait;
 use serde_json::json;
 
-use super::{ChatMessage, ChatRequest, LlmClient, SummarizeRequest, TranslateRequest};
+use super::{
+    ChatMessage, ChatRequest, LlmClient, SuggestTagsRequest, SummarizeRequest, TranslateRequest,
+};
 use crate::shared::error::{AppError, AppResult};
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -115,5 +117,27 @@ impl LlmClient for AnthropicClient {
         let max = req.max_tokens.unwrap_or(CHAT_MAX_TOKENS);
         self.complete_messages(&req.system, &req.messages, max)
             .await
+    }
+
+    async fn suggest_tags(&self, req: SuggestTagsRequest) -> AppResult<String> {
+        let vocab = if req.vocabulary.is_empty() {
+            "(none yet)".to_string()
+        } else {
+            req.vocabulary.join(", ")
+        };
+        let system = format!(
+            "You are a tagging assistant for a personal RSS reader. \
+             Classify the article using a CONSISTENT personal vocabulary. \
+             PREFER reusing tags from this existing vocabulary: [{vocab}]. \
+             Only invent a new tag when none of the existing ones fit. \
+             Return AT MOST {max} tags. \
+             Respond with ONLY a JSON array, no prose, no code fences, like: \
+             [{{\"name\":\"rust\",\"confidence\":0.9}}]. \
+             Tag names should be short, lowercase nouns.",
+            vocab = vocab,
+            max = req.max_tags,
+        );
+        let user = format!("Title: {}\n\n{}", req.title, req.content);
+        self.complete(&system, &user).await
     }
 }

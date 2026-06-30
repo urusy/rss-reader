@@ -42,10 +42,21 @@ pub struct ChatRequest {
     pub max_tokens: Option<u32>,
 }
 
+/// Ask the LLM to classify an article into tags, reusing the existing vocabulary.
+#[derive(Debug, Clone)]
+pub struct SuggestTagsRequest {
+    pub title: String,
+    pub content: String,
+    pub vocabulary: Vec<String>,
+    pub max_tags: usize,
+}
+
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     async fn summarize(&self, req: SummarizeRequest) -> AppResult<String>;
     async fn translate(&self, req: TranslateRequest) -> AppResult<String>;
     /// Multi-turn chat. messages start with user and end with user (caller-validated).
     async fn chat(&self, req: ChatRequest) -> AppResult<String>;
+    /// Tag suggestion. Returns a JSON array string (caller parses it).
+    async fn suggest_tags(&self, req: SuggestTagsRequest) -> AppResult<String>;
 }

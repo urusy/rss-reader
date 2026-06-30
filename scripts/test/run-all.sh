@@ -20,6 +20,7 @@ scripts=(
   api-instapaper.sh
   api-search.sh
   api-ask.sh
+  api-tags.sh
   api-extraction.sh
   api-opml.sh
   api-mute-rules.sh

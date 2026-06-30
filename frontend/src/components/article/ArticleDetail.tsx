@@ -16,6 +16,7 @@ import {
 } from "@/lib/read-trigger";
 import { Button } from "@/components/ui/button";
 import ArticleAsk from "@/components/article/ArticleAsk";
+import TagEditor from "@/components/TagEditor";
 
 /**
  * 記事本文の描画（要約/翻訳/後で読む/自動既読）。id を prop で受け、
@@ -243,6 +244,9 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             class="prose prose-sm dark:prose-invert max-w-none"
             innerHTML={bodyHtml(a())}
           />
+
+          {/* タグ編集 + AI 提案（#24） */}
+          <TagEditor articleId={a().id} />
 
           {/* Ask Claude（#22）: 記事本文を context にした対話 Q&A */}
           <ArticleAsk articleId={a().id} />
