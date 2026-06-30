@@ -17,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import ArticleAsk from "@/components/article/ArticleAsk";
 import { StarToggle, Highlights } from "@/components/article/Annotations";
+import ListenBar from "@/components/article/ListenBar";
+import { htmlToPlainText } from "@/lib/tts";
 import TagEditor from "@/components/TagEditor";
 
 /**
@@ -70,21 +72,25 @@ export default function ArticleDetail(props: { id: string | undefined }) {
   // onCleanup でタイマー/リスナを破棄するので、すぐ離れた記事は既読にならない。
   // marked は意図的に非リアクティブ（signal にすると effect 依存に入り二重 POST を招く）。
   let marked: string | undefined;
+  // 滞在/スクロール（下）と読み上げ進捗（#33 ListenBar）から共通で呼ぶ既読化。
+  // marked ガードで一度きり。リッスンモードで「聴いて消化」した記事も既読になる。
+  const markReadNow = (id: string) => {
+    if (marked === id) return;
+    marked = id;
+    api
+      .markRead(id, true)
+      .then(() => mutate((prev) => (prev ? { ...prev, is_read: true } : prev)))
+      .catch((e) => console.error("auto mark-read failed", e));
+    app.markReadLocal(id); // 一覧ペインのグレーアウトを実既読に追従させる
+  };
+
   createEffect(() => {
     const a = article();
     // a.id !== props.id: 記事切替の読み込み中に前記事の値が一瞬返ってもアームしない。
     if (!a || a.is_read || a.id !== props.id || marked === a.id) return;
     const id = a.id;
 
-    const doMark = () => {
-      if (marked === id) return;
-      marked = id;
-      api
-        .markRead(id, true)
-        .then(() => mutate((prev) => (prev ? { ...prev, is_read: true } : prev)))
-        .catch((e) => console.error("auto mark-read failed", e));
-      app.markReadLocal(id); // 一覧ペインのグレーアウトを実既読に追従させる
-    };
+    const doMark = () => markReadNow(id);
 
     const timer = setTimeout(doMark, DWELL_MS);
     const scroller = articleEl ? findScrollParent(articleEl) : window;
@@ -238,6 +244,14 @@ export default function ArticleDetail(props: { id: string | undefined }) {
               </div>
             </section>
           </Show>
+
+          {/* リッスンモード（#33 v1）: 表示中の本文をプレーン化して読み上げ。
+              進捗 80% で既読化（markReadNow）に繋ぐ。バックエンド非依存。 */}
+          <ListenBar
+            articleId={a().id}
+            text={htmlToPlainText(bodyHtml(a()))}
+            onListened={() => markReadNow(a().id)}
+          />
 
           {/* 本文は信頼できない HTML。innerHTML 前に必ず浄化する
               （埋め込み <style> によるレイアウト破壊・XSS 対策）。
