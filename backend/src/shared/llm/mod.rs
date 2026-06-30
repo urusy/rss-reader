@@ -26,8 +26,26 @@ pub struct TranslateRequest {
     pub target_lang: String,
 }
 
+/// One conversation turn. role is "user" | "assistant" (system is separate).
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+/// A multi-turn chat request. system is passed out-of-band (Anthropic shape).
+#[derive(Debug, Clone)]
+pub struct ChatRequest {
+    pub system: String,
+    pub messages: Vec<ChatMessage>,
+    /// Max response tokens; None → implementation default.
+    pub max_tokens: Option<u32>,
+}
+
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     async fn summarize(&self, req: SummarizeRequest) -> AppResult<String>;
     async fn translate(&self, req: TranslateRequest) -> AppResult<String>;
+    /// Multi-turn chat. messages start with user and end with user (caller-validated).
+    async fn chat(&self, req: ChatRequest) -> AppResult<String>;
 }

@@ -89,6 +89,17 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface AskMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+export interface AskResponse {
+  answer: string;
+}
+export interface NotesResponse {
+  messages: AskMessage[];
+}
+
 export interface FeedHealth {
   feed_id: string;
   last_fetch_status: "ok" | "error" | null;
@@ -321,6 +332,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Ask Claude (#22): 単一記事への対話 Q&A。messages は user で始まり user で終わる。
+  askArticle: (id: string, messages: AskMessage[], save = false) =>
+    http<AskResponse>(`/api/articles/${id}/ask`, {
+      method: "POST",
+      body: JSON.stringify({ messages, save }),
+    }),
+  askArticles: (ids: string[], messages: AskMessage[]) =>
+    http<AskResponse>("/api/articles/ask", {
+      method: "POST",
+      body: JSON.stringify({ ids, messages }),
+    }),
+  getArticleNotes: (id: string) =>
+    http<NotesResponse>(`/api/articles/${id}/notes`),
   // 記事本文をサーバ側で抽出し full_content をキャッシュ。更新後 Article を返す。
   // full_content が null のまま返ったら「抽出できなかった」= 抜粋にフォールバック。
   extractArticle: (id: string, force = false) =>

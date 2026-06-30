@@ -6,11 +6,12 @@
 use async_trait::async_trait;
 use serde_json::json;
 
-use super::{LlmClient, SummarizeRequest, TranslateRequest};
+use super::{ChatMessage, ChatRequest, LlmClient, SummarizeRequest, TranslateRequest};
 use crate::shared::error::{AppError, AppResult};
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
+const CHAT_MAX_TOKENS: u32 = 2048;
 
 #[derive(Clone)]
 pub struct AnthropicClient {
@@ -21,15 +22,37 @@ pub struct AnthropicClient {
 
 impl AnthropicClient {
     pub fn new(http: reqwest::Client, api_key: String, model: String) -> Self {
-        Self { http, api_key, model }
+        Self {
+            http,
+            api_key,
+            model,
+        }
     }
 
     async fn complete(&self, system: &str, user: &str) -> AppResult<String> {
+        let msgs = [ChatMessage {
+            role: "user".into(),
+            content: user.to_string(),
+        }];
+        self.complete_messages(system, &msgs, 1024).await
+    }
+
+    /// Multi-turn completion. `complete` delegates here with a single user turn.
+    async fn complete_messages(
+        &self,
+        system: &str,
+        messages: &[ChatMessage],
+        max_tokens: u32,
+    ) -> AppResult<String> {
+        let msgs: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|m| json!({ "role": m.role, "content": m.content }))
+            .collect();
         let body = json!({
             "model": self.model,
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "system": system,
-            "messages": [{ "role": "user", "content": user }],
+            "messages": msgs,
         });
 
         let resp = self
@@ -57,7 +80,10 @@ impl AnthropicClient {
         let text = value
             .get("content")
             .and_then(|c| c.as_array())
-            .and_then(|arr| arr.iter().find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text")))
+            .and_then(|arr| {
+                arr.iter()
+                    .find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+            })
             .and_then(|b| b.get("text"))
             .and_then(|t| t.as_str())
             .ok_or_else(|| AppError::Upstream("unexpected anthropic response shape".into()))?;
@@ -83,5 +109,11 @@ impl LlmClient for AnthropicClient {
             req.target_lang
         );
         self.complete(&system, &req.content).await
+    }
+
+    async fn chat(&self, req: ChatRequest) -> AppResult<String> {
+        let max = req.max_tokens.unwrap_or(CHAT_MAX_TOKENS);
+        self.complete_messages(&req.system, &req.messages, max)
+            .await
     }
 }
