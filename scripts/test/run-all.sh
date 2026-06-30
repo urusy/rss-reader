@@ -15,6 +15,7 @@ scripts=(
   api-feeds.sh
   api-feeds-discover.sh
   api-feed-overview.sh
+  api-feed-health.sh
   api-folders.sh
   api-instapaper.sh
   api-search.sh

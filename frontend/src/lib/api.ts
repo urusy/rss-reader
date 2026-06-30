@@ -89,6 +89,17 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface FeedHealth {
+  feed_id: string;
+  last_fetch_status: "ok" | "error" | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  last_fetch_attempted_at: string | null;
+  last_fetched_at: string | null;
+  last_published_at: string | null;
+  health: "healthy" | "stale" | "dead";
+}
+
 export interface DiscoveredFeed {
   url: string;
   title: string | null;
@@ -173,6 +184,7 @@ export const api = {
     }),
   deleteFeed: (id: string) => http<void>(`/api/feeds/${id}`, { method: "DELETE" }),
   listFeedOverview: () => http<FeedOverview[]>("/api/feeds/overview"),
+  listFeedHealth: () => http<FeedHealth[]>("/api/feeds/health"),
 
   /**
    * フィードの部分更新（リネーム / フォルダ割当 / 未分類化）。

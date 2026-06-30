@@ -3,6 +3,7 @@ pub mod auth;
 pub mod backup;
 pub mod extraction;
 pub mod feed_discovery;
+pub mod feed_health;
 pub mod feed_overview;
 pub mod feeds;
 pub mod folders;
@@ -38,6 +39,7 @@ pub fn router(state: AppState) -> Router {
         .merge(extraction::routes())
         .merge(stats::routes())
         .merge(feed_overview::routes())
+        .merge(feed_health::routes())
         .merge(folders::routes())
         .merge(instapaper::routes())
         .merge(search::routes())

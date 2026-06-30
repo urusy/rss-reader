@@ -69,8 +69,36 @@ pub async fn refresh_all_feeds(state: &AppState) -> AppResult<()> {
     Ok(())
 }
 
-/// Fetch one feed over HTTP, parse it, and upsert its entries as articles.
+/// Fetch choke point. Records the crawl outcome to feed_health (#21) then returns
+/// the result unchanged. Scheduled refresh, manual refresh, and the initial fetch
+/// on create all go through here, so one hook covers every path.
 pub async fn fetch_and_store(state: &AppState, feed: &Feed) -> AppResult<()> {
+    let result = fetch_and_store_inner(state, feed).await;
+    match &result {
+        Ok(()) => {
+            if let Err(e) =
+                crate::features::feed_health::repository::record_success(&state.db, feed.id.0).await
+            {
+                tracing::warn!(error = %e, feed = %feed.url, "record_success failed");
+            }
+        }
+        Err(e) => {
+            if let Err(re) = crate::features::feed_health::repository::record_failure(
+                &state.db,
+                feed.id.0,
+                &e.to_string(),
+            )
+            .await
+            {
+                tracing::warn!(error = %re, feed = %feed.url, "record_failure failed");
+            }
+        }
+    }
+    result
+}
+
+/// Fetch one feed over HTTP, parse it, and upsert its entries as articles.
+async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
     let bytes = state
         .http
         .get(&feed.url)
