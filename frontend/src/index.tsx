@@ -8,6 +8,7 @@ import ArticleView from "./routes/ArticleView";
 import Search from "./routes/Search";
 import Settings from "./routes/Settings";
 import FeedManage from "./routes/FeedManage";
+import Digest from "./routes/Digest";
 import NotFound from "./routes/NotFound";
 import { initTheme } from "./lib/theme";
 
@@ -26,6 +27,7 @@ render(
       <Route path="/articles/:id" component={ArticleView} />
       <Route path="/search" component={Search} />
       <Route path="/manage" component={FeedManage} />
+      <Route path="/digest" component={Digest} />
       <Route path="/settings" component={Settings} />
       <Route path="*" component={NotFound} />
     </Router>

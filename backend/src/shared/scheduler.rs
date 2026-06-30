@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use tokio::time::{interval, MissedTickBehavior};
 
+use chrono::{Timelike, Utc};
+
 use super::state::AppState;
+use crate::features::digest;
 use crate::features::feeds;
 use crate::features::mute_rules;
 
@@ -27,6 +30,29 @@ pub fn spawn(state: AppState) {
             // #19: 新着にミュートを反映（hide リセット→再付与で冪等）。失敗してもクロールは継続。
             if let Err(e) = mute_rules::service::apply_all(&state).await {
                 tracing::error!(error = %e, "mute apply failed");
+            }
+        }
+    });
+}
+
+/// Daily digest loop (#23). Wakes hourly; when the UTC hour matches the configured
+/// hour and digests are enabled, ensures today's digest exists (idempotent).
+pub fn spawn_digest(state: AppState) {
+    if !state.config.digest_enabled {
+        tracing::info!("daily digest disabled (DIGEST_ENABLED is not true)");
+        return;
+    }
+    let target_hour = state.config.digest_hour_utc;
+    tokio::spawn(async move {
+        let mut ticker = interval(Duration::from_secs(3600));
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            if Utc::now().hour() == target_hour {
+                tracing::info!("daily digest tick");
+                if let Err(e) = digest::service::ensure_today(&state).await {
+                    tracing::error!(error = %e, "daily digest generation failed");
+                }
             }
         }
     });

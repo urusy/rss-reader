@@ -42,6 +42,8 @@ async fn main() -> anyhow::Result<()> {
     scheduler::spawn(state.clone());
     // Optional scheduled pg_dump (no-op unless BACKUP_DIR + interval are set).
     features::backup::service::spawn_pgdump_scheduler(state.clone());
+    // Optional daily AI digest (no-op unless DIGEST_ENABLED=true).
+    scheduler::spawn_digest(state.clone());
 
     let app = features::router(state.clone());
 
@@ -50,9 +52,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("failed to bind {}", state.config.bind_addr))?;
     tracing::info!("listening on http://{}", state.config.bind_addr);
 
-    axum::serve(listener, app)
-        .await
-        .context("server error")?;
+    axum::serve(listener, app).await.context("server error")?;
 
     Ok(())
 }

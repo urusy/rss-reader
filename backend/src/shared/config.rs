@@ -28,6 +28,19 @@ pub struct AppConfig {
     pub extract_max_bytes: usize,
     /// Minimum plain-text chars for an extraction to count as "real body".
     pub extract_min_chars: usize,
+    /// AI daily digest (#23): enable the scheduled daily generation.
+    pub digest_enabled: bool,
+    /// UTC hour (0-23) to run daily digest generation. Default 21 (~JST 06:00).
+    pub digest_hour_utc: u32,
+    /// Output language for the digest. Default "ja".
+    pub digest_lang: String,
+    /// Optional SMTP for digest email (sent only when host/from/to all set).
+    pub smtp_host: Option<String>,
+    pub smtp_port: u16,
+    pub smtp_username: Option<String>,
+    pub smtp_password: Option<String>,
+    pub digest_email_from: Option<String>,
+    pub digest_email_to: Option<String>,
 }
 
 impl AppConfig {
@@ -74,6 +87,34 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(200);
 
+        let digest_enabled = std::env::var("DIGEST_ENABLED")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let digest_hour_utc = std::env::var("DIGEST_HOUR_UTC")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|h| *h <= 23)
+            .unwrap_or(21);
+        let digest_lang = std::env::var("DIGEST_LANG").unwrap_or_else(|_| "ja".to_string());
+        let smtp_host = std::env::var("SMTP_HOST").ok().filter(|v| !v.is_empty());
+        let smtp_port = std::env::var("SMTP_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(587);
+        let smtp_username = std::env::var("SMTP_USERNAME")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let smtp_password = std::env::var("SMTP_PASSWORD")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let digest_email_from = std::env::var("DIGEST_EMAIL_FROM")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let digest_email_to = std::env::var("DIGEST_EMAIL_TO")
+            .ok()
+            .filter(|v| !v.is_empty());
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -87,6 +128,15 @@ impl AppConfig {
             extract_on_crawl,
             extract_max_bytes,
             extract_min_chars,
+            digest_enabled,
+            digest_hour_utc,
+            digest_lang,
+            smtp_host,
+            smtp_port,
+            smtp_username,
+            smtp_password,
+            digest_email_from,
+            digest_email_to,
         })
     }
 
@@ -107,6 +157,15 @@ impl AppConfig {
             extract_on_crawl: false,
             extract_max_bytes: 3_000_000,
             extract_min_chars: 200,
+            digest_enabled: false,
+            digest_hour_utc: 21,
+            digest_lang: "ja".to_string(),
+            smtp_host: None,
+            smtp_port: 587,
+            smtp_username: None,
+            smtp_password: None,
+            digest_email_from: None,
+            digest_email_to: None,
         }
     }
 }

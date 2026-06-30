@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use super::{
-    ChatMessage, ChatRequest, LlmClient, SuggestTagsRequest, SummarizeRequest, TranslateRequest,
+    ChatMessage, ChatRequest, DigestRequest, LlmClient, SuggestTagsRequest, SummarizeRequest,
+    TranslateRequest,
 };
 use crate::shared::error::{AppError, AppResult};
 
@@ -139,5 +140,16 @@ impl LlmClient for AnthropicClient {
         );
         let user = format!("Title: {}\n\n{}", req.title, req.content);
         self.complete(&system, &user).await
+    }
+
+    async fn digest(&self, req: DigestRequest) -> AppResult<String> {
+        let system = format!(
+            "You are an editor compiling a daily news digest in {}. Group the \
+             following articles by topic. For each topic, write a short heading \
+             (Markdown '## ') and 2-4 concise bullet points capturing the key \
+             points. Keep each article's source link. Output Markdown only.",
+            req.target_lang
+        );
+        self.complete(&system, &req.items).await
     }
 }

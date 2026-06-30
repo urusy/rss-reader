@@ -89,6 +89,14 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+export interface Digest {
+  date: string;
+  markdown: string;
+  model: string;
+  article_count: number;
+  created_at: string;
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -352,6 +360,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ lang }),
     }),
+  // Digest (#23)
+  getLatestDigest: () => http<Digest>("/api/digest/latest"),
+  getDigest: (date: string) =>
+    http<Digest>(`/api/digest?date=${encodeURIComponent(date)}`),
+  refreshDigest: () => http<Digest>("/api/digest/refresh", { method: "POST" }),
   // Tags (#24)
   listTags: () => http<Tag[]>("/api/tags"),
   createTag: (body: { name: string; color?: string }) =>

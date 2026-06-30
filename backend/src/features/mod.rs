@@ -2,6 +2,7 @@ pub mod articles;
 pub mod ask;
 pub mod auth;
 pub mod backup;
+pub mod digest;
 pub mod extraction;
 pub mod feed_discovery;
 pub mod feed_health;
@@ -49,6 +50,7 @@ pub fn router(state: AppState) -> Router {
         .merge(opml::routes())
         .merge(mute_rules::routes())
         .merge(tags::routes())
+        .merge(digest::routes())
         .merge(backup::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

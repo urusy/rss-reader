@@ -51,6 +51,14 @@ pub struct SuggestTagsRequest {
     pub max_tags: usize,
 }
 
+/// Ask the LLM to compile a topic-grouped daily digest (Markdown).
+#[derive(Debug, Clone)]
+pub struct DigestRequest {
+    /// Article list as a Markdown bullet list (built by build_digest_input).
+    pub items: String,
+    pub target_lang: String,
+}
+
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     async fn summarize(&self, req: SummarizeRequest) -> AppResult<String>;
@@ -59,4 +67,6 @@ pub trait LlmClient: Send + Sync {
     async fn chat(&self, req: ChatRequest) -> AppResult<String>;
     /// Tag suggestion. Returns a JSON array string (caller parses it).
     async fn suggest_tags(&self, req: SuggestTagsRequest) -> AppResult<String>;
+    /// Daily digest: topic-grouped Markdown from a list of articles.
+    async fn digest(&self, req: DigestRequest) -> AppResult<String>;
 }

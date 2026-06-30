@@ -32,6 +32,10 @@ services:
       BACKUP_TOKEN: ${BACKUP_TOKEN:-}
       BACKUP_DIR: ${BACKUP_DIR:-}
       BACKUP_PGDUMP_INTERVAL_SECS: ${BACKUP_PGDUMP_INTERVAL_SECS:-}
+      # Daily AI digest (#23). Off unless DIGEST_ENABLED=true; SMTP optional.
+      DIGEST_ENABLED: ${DIGEST_ENABLED:-}
+      DIGEST_HOUR_UTC: ${DIGEST_HOUR_UTC:-}
+      DIGEST_LANG: ${DIGEST_LANG:-}
       RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
     depends_on:
       db:
