@@ -4,6 +4,25 @@
 /* Enable class-based dark mode. Dark-ish themes (dark, graphite) get `dark:` utils. */
 @custom-variant dark (&:is(.dark *, .graphite *));
 
+/* Safe-area helpers (iPhone notch / Dynamic Island / home indicator).
+   要 viewport-fit=cover。既存パディングと重ねたい箇所は calc(... + env(...)) を直接使う。 */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 /* shadcn-solid compatible design tokens. Neutral, high-contrast, minimal. */
 :root {
   --background: oklch(1 0 0);
@@ -111,4 +130,15 @@ body {
   @apply bg-background text-foreground;
   font-family: ui-sans-serif, system-ui, -apple-system, "Hiragino Kaku Gothic ProN",
     "Noto Sans JP", Meiryo, sans-serif;
+}
+
+/* 外部フィード本文（prose）の埋め込み要素が狭幅ではみ出さないための保険。 */
+.prose :where(img, video, iframe, table) {
+  max-width: 100%;
+}
+.prose :where(img, video) {
+  height: auto;
+}
+.prose :where(pre) {
+  overflow-x: auto;
 }
