@@ -13,11 +13,13 @@ import Clusters from "./routes/Clusters";
 import Rules from "./routes/Rules";
 import NotFound from "./routes/NotFound";
 import { initTheme } from "./lib/theme";
+import { initTtsDict } from "./lib/tts-dict-store";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
 
 initTheme(); // render 前に <html> へ dark クラス + color-scheme を同期適用
+initTtsDict(); // 読み上げユーザー辞書を localStorage から読み込む
 
 render(
   () => (
