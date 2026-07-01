@@ -41,6 +41,31 @@ export function splitSentences(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * 環境で最も自然に読めそうな日本語音声を選ぶ（声未選択時の既定）。
+ *
+ * `speechSynthesis` の既定音声は OS 依存（macOS/iOS は Kyoko/O-ren といった機械的な声）
+ * なので、明示選択が無いと自然さを取りこぼす。ここでは ja 音声を品質順に採点して選ぶ。
+ * ja 音声が 1 つも無ければ null（エンジン既定に委ねる）。
+ */
+export function pickBestJaVoice(
+  voices: SpeechSynthesisVoice[],
+): SpeechSynthesisVoice | null {
+  const ja = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("ja"));
+  if (ja.length === 0) return null;
+  const score = (v: SpeechSynthesisVoice): number => {
+    const n = `${v.name} ${v.voiceURI}`.toLowerCase();
+    let s = 0;
+    if (/natural|neural|enhanced|premium/.test(n)) s += 100; // ニューラル/高品質声
+    if (v.localService === false) s += 40; // オンライン/ネットワーク声は概して高品質
+    if (/nanami|keita|hattori|ayumi|ichiro/.test(n)) s += 20; // 既知の良質声
+    if (/google/.test(n)) s += 15; // Chrome/Android の Google 日本語
+    if (/kyoko|o-?ren|otoya|siri/.test(n)) s += 5; // 既定級（下限のフォールバック）
+    return s;
+  };
+  return ja.reduce((best, v) => (score(v) > score(best) ? v : best), ja[0]);
+}
+
 /** 利用可能なボイス一覧。getVoices は非同期に埋まるため voiceschanged も待つ。 */
 export function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   if (!ttsSupported()) return Promise.resolve([]);
@@ -67,6 +92,11 @@ export interface TtsController {
   dispose: () => void;
 }
 
+/** 進捗補間の想定読了速度（rate=1 時・1 秒あたり文字数）。おおよその体感値。 */
+const CHARS_PER_SEC = 7;
+/** 進捗補間タイマーの間隔（ms）。 */
+const PROGRESS_TICK_MS = 250;
+
 /**
  * 1記事ぶんの読み上げコントローラを作る。text は呼び出し側でプレーン化済み。
  */
@@ -91,6 +121,15 @@ export function createTtsController(
   let idx = 0;
   let state: TtsState = "idle";
   let disposed = false;
+  // 現チャンクの進捗補間タイマー。チャンク遷移・stop・dispose で必ず解除する。
+  let progressTimer: ReturnType<typeof setInterval> | undefined;
+
+  const clearTimer = () => {
+    if (progressTimer !== undefined) {
+      clearInterval(progressTimer);
+      progressTimer = undefined;
+    }
+  };
 
   const setState = (s: TtsState) => {
     state = s;
@@ -104,6 +143,7 @@ export function createTtsController(
 
   const speakFrom = (i: number) => {
     if (disposed) return;
+    clearTimer(); // 前チャンクの補間タイマーが残らないよう先に解除。
     if (i >= chunks.length) {
       setState("idle");
       cb.onProgress?.(1);
@@ -111,20 +151,51 @@ export function createTtsController(
       return;
     }
     idx = i;
-    // これから読む文の index を通知（105 行で disposed は早期 return 済み）。
+    // これから読む文の index を通知（disposed は冒頭で早期 return 済み）。
     // 完了 terminal 分岐（i>=length）は idx=i の前に return するので発火しない
     // ＝ chunk===count は保存されず、クリアは onEnd が担う。
     cb.onChunk?.(i, chunks.length);
-    const u = new SpeechSynthesisUtterance(chunks[i]);
+    const chunk = chunks[i];
+    const u = new SpeechSynthesisUtterance(chunk);
+    const rate = opts.rate && opts.rate > 0 ? opts.rate : 1;
     if (opts.rate) u.rate = opts.rate;
     if (opts.voice) u.voice = opts.voice;
-    // dispose 済みコントローラの遅延 onboundary が進捗を汚さないようガード。
+
+    // チャンク内の進捗（文字位置）。onboundary（正確）と時間補間（onboundary を
+    // 発火しないニューラル音声向けの推定）のうち大きい方を採り、単調増加を保証する。
+    let charInChunk = 0;
+    let boundaryFired = false;
+    const advance = (c: number) => {
+      const clamped = Math.min(Math.max(c, 0), chunk.length);
+      if (!disposed && clamped > charInChunk) {
+        charInChunk = clamped;
+        report(charInChunk);
+      }
+    };
+    // dispose 済みコントローラの遅延 onboundary が進捗を汚さないよう advance がガード。
     u.onboundary = (e) => {
-      if (!disposed) report(e.charIndex ?? 0);
+      boundaryFired = true; // 以後は正確な onboundary を信頼し補間を止める。
+      advance(e.charIndex ?? 0);
     };
     u.onend = () => {
+      clearTimer();
       if (!disposed && state === "playing") speakFrom(i + 1);
     };
+
+    // 時間補間: onboundary が来ない音声でも進捗バー/既読化/位置保存を前進させる。
+    // 一時停止中（state!=="playing"）は加算せず凍結。onboundary が来たら補間を止める。
+    let elapsedMs = 0;
+    const msPerChar = 1000 / (CHARS_PER_SEC * rate);
+    progressTimer = setInterval(() => {
+      if (disposed) {
+        clearTimer();
+        return;
+      }
+      if (state !== "playing" || boundaryFired) return;
+      elapsedMs += PROGRESS_TICK_MS;
+      advance(elapsedMs / msPerChar);
+    }, PROGRESS_TICK_MS);
+
     synth.speak(u);
   };
 
@@ -152,12 +223,14 @@ export function createTtsController(
       }
     },
     stop: () => {
+      clearTimer();
       synth.cancel();
       setState("idle");
       cb.onProgress?.(0);
     },
     dispose: () => {
       disposed = true;
+      clearTimer();
       synth.cancel();
     },
   };
