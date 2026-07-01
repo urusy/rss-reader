@@ -86,6 +86,9 @@ pub async fn mark_all_read(
 pub struct LangBody {
     #[serde(default = "default_lang")]
     pub lang: String,
+    /// true = キャッシュを無視して再生成（モデル/プロンプト変更後の作り直し用）。
+    #[serde(default)]
+    pub force: bool,
 }
 fn default_lang() -> String {
     "ja".to_string()
@@ -96,7 +99,7 @@ pub async fn summarize(
     Path(id): Path<Uuid>,
     Json(body): Json<LangBody>,
 ) -> AppResult<Json<Article>> {
-    let article = service::summarize_article(&state, ArticleId(id), &body.lang).await?;
+    let article = service::summarize_article(&state, ArticleId(id), &body.lang, body.force).await?;
     Ok(Json(article))
 }
 
@@ -105,8 +108,24 @@ pub async fn translate(
     Path(id): Path<Uuid>,
     Json(body): Json<LangBody>,
 ) -> AppResult<Json<Article>> {
-    let article = service::translate_article(&state, ArticleId(id), &body.lang).await?;
+    let article = service::translate_article(&state, ArticleId(id), &body.lang, body.force).await?;
     Ok(Json(article))
+}
+
+pub async fn delete_summary(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> AppResult<StatusCode> {
+    service::clear_summary(&state, ArticleId(id)).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn delete_translation(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> AppResult<StatusCode> {
+    service::clear_translation(&state, ArticleId(id)).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

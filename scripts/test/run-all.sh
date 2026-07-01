@@ -22,6 +22,7 @@ scripts=(
   api-saved-views.sh
   api-rules.sh
   api-annotations.sh
+  api-llm-settings.sh
   api-ask.sh
   api-tags.sh
   api-digest.sh

@@ -3,7 +3,8 @@
 //! length. Everything here is deterministic so it can be unit-tested offline
 //! (Red→Green) — see the tests at the bottom.
 
-use scraper::{ElementRef, Html, Selector};
+use ego_tree::iter::Edge;
+use scraper::{ElementRef, Html, Node, Selector};
 
 /// Tags removed *with their content* during sanitize. Several of these
 /// (`nav`/`header`/`footer`/`aside`) are in ammonia's default tag whitelist, so
@@ -108,6 +109,92 @@ pub fn sanitize_content(raw_html: &str) -> String {
         .clean_content_tags(STRIP_TAGS.into_iter().collect())
         .clean(raw_html)
         .to_string()
+}
+
+/// Block-level tags whose *opening* marks a line boundary when flattening HTML
+/// to text. Inline tags (`a`/`span`/`b`/…) intentionally omitted so a sentence
+/// with inline markup stays on one line (important for CJK: no spurious spaces).
+const BLOCK_TAGS: [&str; 18] = [
+    "p",
+    "div",
+    "section",
+    "article",
+    "br",
+    "li",
+    "ul",
+    "ol",
+    "tr",
+    "table",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "pre",
+];
+
+/// HTML（または既に平文）を LLM 向けプレーンテキストへ正規化する純関数。
+///
+/// - まず `sanitize_content` で `<script>/<style>/<nav>` 等を内容ごと除去し、
+///   inline `style` 属性も落とす（ammonia の既定許可外属性のため）。
+/// - DOM を traverse し、ブロック要素の開始に改行を挿入して段落構造を保つ。
+/// - 連続する空白/タブは 1 個へ畳み（改行は保持）、空行の連続は 1 行へ圧縮、前後を trim。
+///
+/// 用途は2つ:
+/// 1. LLM への**入力**を平文化する（HTML の echo を上流で抑制＋入力トークン削減）。
+/// 2. LLM の**出力**を保存前に通すガード（モデルが自発的に吐いた HTML を決定的に除去）。
+///
+/// 平文入力に対して概ね冪等なので、(2) で安全に再適用できる。`plain_text_len`
+/// （文字数判定専用）とは責務が別のため統合しない。
+pub fn html_to_plain_text(input: &str) -> String {
+    let clean = sanitize_content(input);
+    let frag = Html::parse_fragment(&clean);
+    let mut out = String::new();
+    for edge in frag.root_element().traverse() {
+        if let Edge::Open(node) = edge {
+            match node.value() {
+                Node::Text(t) => out.push_str(t),
+                Node::Element(e) if BLOCK_TAGS.contains(&e.name()) => out.push('\n'),
+                _ => {}
+            }
+        }
+    }
+    normalize_ws(&out)
+}
+
+/// 行内の空白/タブ連続を 1 個へ、空行の連続を 1 つへ圧縮し、前後を trim する。
+/// 改行そのものは段落区切りとして保持する。
+fn normalize_ws(s: &str) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let mut in_blank_run = false;
+    for raw in s.split('\n') {
+        let mut line = String::new();
+        let mut prev_space = false;
+        for c in raw.chars() {
+            let is_space = c == ' ' || c == '\t' || c == '\r';
+            if is_space {
+                if !prev_space {
+                    line.push(' ');
+                }
+            } else {
+                line.push(c);
+            }
+            prev_space = is_space;
+        }
+        let line = line.trim().to_string();
+        if line.is_empty() {
+            if in_blank_run {
+                continue; // 連続する空行は1つに圧縮
+            }
+            in_blank_run = true;
+        } else {
+            in_blank_run = false;
+        }
+        lines.push(line);
+    }
+    lines.join("\n").trim().to_string()
 }
 
 /// Approximate plain-text length (whitespace excluded) of sanitized HTML.
@@ -240,5 +327,72 @@ mod tests {
     #[test]
     fn plain_text_len_ignores_tags_and_whitespace() {
         assert_eq!(plain_text_len("<p>ab  cd</p>"), 4);
+    }
+
+    // --- html_to_plain_text: LLM 入力・出力ガード用の HTML→平文正規化 ---
+
+    #[test]
+    fn plain_text_keeps_paragraph_breaks() {
+        // ブロック境界は改行になる（段落構造を平文で保持）。
+        assert_eq!(html_to_plain_text("<p>a</p><p>b</p>"), "a\nb");
+    }
+
+    #[test]
+    fn plain_text_br_becomes_newline() {
+        assert_eq!(html_to_plain_text("x<br>y"), "x\ny");
+    }
+
+    #[test]
+    fn plain_text_strips_style_block_and_inline_style() {
+        // <style> ブロックは内容ごと除去。inline style 属性も落ちる。
+        assert_eq!(
+            html_to_plain_text(r#"<style>.x{color:red}</style><p>hi</p>"#),
+            "hi"
+        );
+        assert_eq!(
+            html_to_plain_text(r#"<span style="color:red">hi</span>"#),
+            "hi"
+        );
+    }
+
+    #[test]
+    fn plain_text_collapses_inline_whitespace() {
+        assert_eq!(html_to_plain_text("<p>ab   cd</p>"), "ab cd");
+    }
+
+    #[test]
+    fn plain_text_inline_elements_stay_on_one_line() {
+        // インライン要素（a/b 等）は行を分けない。
+        assert_eq!(
+            html_to_plain_text(r#"<p>Hello <a href="/x">world</a>!</p>"#),
+            "Hello world!"
+        );
+    }
+
+    #[test]
+    fn plain_text_preserves_lt_and_amp_in_text() {
+        // 正常系の < / & は文字として保持する（描画退行を起こさないことの回帰）。
+        assert_eq!(html_to_plain_text("5 < 10 and A&B"), "5 < 10 and A&B");
+    }
+
+    #[test]
+    fn plain_text_is_idempotent_on_plain_input() {
+        // 既に平文（段落は空行区切り）の入力はそのまま通す＝出力ガードで安全に再適用できる。
+        assert_eq!(html_to_plain_text("para1\n\npara2"), "para1\n\npara2");
+    }
+
+    #[test]
+    fn plain_text_collapses_3plus_blank_lines_to_one() {
+        assert_eq!(html_to_plain_text("a\n\n\n\nb"), "a\n\nb");
+    }
+
+    #[test]
+    fn plain_text_output_guard_removes_leaked_markup() {
+        // LLM が自発的に吐いた <style> 等が保存前に決定的に除去される。
+        let leaked = "<style>a{}</style>これは要約本文です。";
+        let out = html_to_plain_text(leaked);
+        assert_eq!(out, "これは要約本文です。");
+        assert!(!out.contains("<style>"));
+        assert!(!out.contains("a{}"));
     }
 }

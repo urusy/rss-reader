@@ -138,6 +138,32 @@ pub async fn save_translation(
     Ok(())
 }
 
+/// Clear a cached summary (set it and its language back to NULL) so the user
+/// can discard a stale/garbled result. NotFound if the article doesn't exist.
+pub async fn clear_summary(pool: &PgPool, id: ArticleId) -> AppResult<()> {
+    let res = sqlx::query("UPDATE articles SET summary = NULL, summary_lang = NULL WHERE id = $1")
+        .bind(id.0)
+        .execute(pool)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
+/// Clear a cached translation (mirrors `clear_summary`).
+pub async fn clear_translation(pool: &PgPool, id: ArticleId) -> AppResult<()> {
+    let res =
+        sqlx::query("UPDATE articles SET translation = NULL, translation_lang = NULL WHERE id = $1")
+            .bind(id.0)
+            .execute(pool)
+            .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 /// Cache the extracted full body. Only called on a successful extraction; on
 /// failure the caller leaves full_content NULL so AI/display fall back to
 /// `content`. Called from the `extraction` slice (same-aggregate write, mirrors

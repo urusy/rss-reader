@@ -98,19 +98,21 @@ impl AnthropicClient {
 #[async_trait]
 impl LlmClient for AnthropicClient {
     async fn summarize(&self, req: SummarizeRequest) -> AppResult<String> {
-        let system = format!(
-            "You are a concise summarizer. Summarize the article in {} in 3-5 sentences. Output only the summary.",
-            req.target_lang
-        );
+        let tmpl = req
+            .system_prompt
+            .as_deref()
+            .unwrap_or(super::DEFAULT_SUMMARIZE_PROMPT);
+        let system = tmpl.replace("{lang}", &req.target_lang);
         let user = format!("Title: {}\n\n{}", req.title, req.content);
         self.complete(&system, &user).await
     }
 
     async fn translate(&self, req: TranslateRequest) -> AppResult<String> {
-        let system = format!(
-            "You are a translator. Translate the text into {}. Preserve meaning and tone. Output only the translation.",
-            req.target_lang
-        );
+        let tmpl = req
+            .system_prompt
+            .as_deref()
+            .unwrap_or(super::DEFAULT_TRANSLATE_PROMPT);
+        let system = tmpl.replace("{lang}", &req.target_lang);
         self.complete(&system, &req.content).await
     }
 

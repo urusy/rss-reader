@@ -11,6 +11,14 @@ use async_trait::async_trait;
 
 use crate::shared::error::AppResult;
 
+/// Built-in system-prompt templates for summarize/translate. `{lang}` is replaced
+/// with the target language at call time. Kept here (not in the adapter) so the
+/// `llm_settings` slice can surface them as the "reset to default" text in the UI.
+pub const DEFAULT_SUMMARIZE_PROMPT: &str =
+    "You are a concise summarizer. Summarize the article in {lang} in 3-5 sentences. Output only the summary.";
+pub const DEFAULT_TRANSLATE_PROMPT: &str =
+    "You are a translator. Translate the text into {lang}. Preserve meaning and tone. Output only the translation.";
+
 /// What we ask an LLM to do for a single article. Kept provider-agnostic.
 #[derive(Debug, Clone)]
 pub struct SummarizeRequest {
@@ -18,12 +26,18 @@ pub struct SummarizeRequest {
     pub content: String,
     /// Target language for the summary, e.g. "ja".
     pub target_lang: String,
+    /// Optional system-prompt override (raw template, may contain `{lang}`).
+    /// None → the adapter uses DEFAULT_SUMMARIZE_PROMPT.
+    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TranslateRequest {
     pub content: String,
     pub target_lang: String,
+    /// Optional system-prompt override (raw template, may contain `{lang}`).
+    /// None → the adapter uses DEFAULT_TRANSLATE_PROMPT.
+    pub system_prompt: Option<String>,
 }
 
 /// One conversation turn. role is "user" | "assistant" (system is separate).

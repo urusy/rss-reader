@@ -45,6 +45,9 @@ dotenvy = "0.15"
 async-trait = "0.1"
 scraper = "0.27.0"
 ammonia = "4.1.3"
+# scraper 0.27 の推移依存（Cargo.lock で 0.11.0 に固定済み）。HTML を平文化する
+# html_to_plain_text で DOM を traverse するため直接依存として明示する。
+ego-tree = "0.11"
 quick-xml = "0.41.0"
 
 [profile.release]

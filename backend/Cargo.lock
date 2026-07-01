@@ -1746,6 +1746,7 @@ dependencies = [
  "axum",
  "chrono",
  "dotenvy",
+ "ego-tree",
  "feed-rs",
  "quick-xml 0.41.0",
  "reqwest",
