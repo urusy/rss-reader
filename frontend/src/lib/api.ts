@@ -89,6 +89,25 @@ export interface ReadLaterSettings {
   mark_read_on_save: boolean;
 }
 
+/** 要約/翻訳のモデル・プロンプト設定（#llm_settings）。
+ *  *_model / *_prompt が null のときは default_* にフォールバックする。 */
+export interface LlmSettings {
+  summarize_model: string | null;
+  summarize_prompt: string | null;
+  translate_model: string | null;
+  translate_prompt: string | null;
+  default_model: string;
+  default_summarize_prompt: string;
+  default_translate_prompt: string;
+}
+
+export interface LlmSettingsPatch {
+  summarize_model?: string | null;
+  summarize_prompt?: string | null;
+  translate_model?: string | null;
+  translate_prompt?: string | null;
+}
+
 export type Combinator = "all" | "any";
 export type KeywordTarget = "title" | "content" | "any";
 export type DateOp = "older_than_days" | "newer_than_days";
@@ -473,16 +492,28 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ mark_read_on_save }),
     }),
-  summarize: (id: string, lang = "ja") =>
+  getLlmSettings: () => http<LlmSettings>("/api/settings/llm"),
+  updateLlmSettings: (patch: LlmSettingsPatch) =>
+    http<LlmSettings>("/api/settings/llm", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+  // force=true でキャッシュを無視して再生成（モデル/プロンプト変更後の作り直し）。
+  summarize: (id: string, lang = "ja", force = false) =>
     http<Article>(`/api/articles/${id}/summarize`, {
       method: "POST",
-      body: JSON.stringify({ lang }),
+      body: JSON.stringify({ lang, force }),
     }),
-  translate: (id: string, lang = "ja") =>
+  translate: (id: string, lang = "ja", force = false) =>
     http<Article>(`/api/articles/${id}/translate`, {
       method: "POST",
-      body: JSON.stringify({ lang }),
+      body: JSON.stringify({ lang, force }),
     }),
+  // 古い/壊れたキャッシュを破棄（該当カラムを NULL に）。204 を返す。
+  deleteSummary: (id: string) =>
+    http<void>(`/api/articles/${id}/summarize`, { method: "DELETE" }),
+  deleteTranslation: (id: string) =>
+    http<void>(`/api/articles/${id}/translate`, { method: "DELETE" }),
   // Rules engine (#28)
   listRules: () => http<Rule[]>("/api/rules"),
   getRule: (id: string) => http<Rule>(`/api/rules/${id}`),
