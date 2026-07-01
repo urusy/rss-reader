@@ -16,6 +16,7 @@ pub mod health;
 pub mod instapaper;
 pub mod llm_settings;
 pub mod mute_rules;
+pub mod notifications;
 pub mod opml;
 pub mod relevance;
 pub mod saved_views;
@@ -58,6 +59,7 @@ pub fn router(state: AppState) -> Router {
         .merge(saved_views::routes())
         .merge(opml::routes())
         .merge(mute_rules::routes())
+        .merge(notifications::routes())
         .merge(tags::routes())
         .merge(digest::routes())
         .merge(relevance::routes())

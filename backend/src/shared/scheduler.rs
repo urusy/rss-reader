@@ -9,6 +9,7 @@ use crate::features::clustering;
 use crate::features::digest;
 use crate::features::feeds;
 use crate::features::mute_rules;
+use crate::features::notifications;
 
 /// Spawn the periodic feed-refresh loop.
 ///
@@ -31,6 +32,11 @@ pub fn spawn(state: AppState) {
             // #19: 新着にミュートを反映（hide リセット→再付与で冪等）。失敗してもクロールは継続。
             if let Err(e) = mute_rules::service::apply_all(&state).await {
                 tracing::error!(error = %e, "mute apply failed");
+            }
+            // #31: 高優先フィードの新着を Web Push で通知（ミュート適用後に評価）。
+            // VAPID 未設定なら no-op。失敗してもクロールは継続。
+            if let Err(e) = notifications::service::notify_new_articles(&state).await {
+                tracing::error!(error = %e, "push notification dispatch failed");
             }
         }
     });

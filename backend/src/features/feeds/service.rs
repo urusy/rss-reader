@@ -36,10 +36,17 @@ pub async fn update_feed(
     id: FeedId,
     title: Option<String>,
     folder_id: Option<Option<FolderId>>,
+    priority: Option<i16>,
 ) -> AppResult<Feed> {
     if let Some(t) = &title {
         if t.trim().is_empty() {
             return Err(AppError::Validation("title must not be empty".into()));
+        }
+    }
+    // 優先度は 0=通常 / 1=高 の2値のみ受け付ける（#31）。
+    if let Some(p) = priority {
+        if !(0..=1).contains(&p) {
+            return Err(AppError::Validation("priority must be 0 or 1".into()));
         }
     }
     // 実在しないフォルダへの割当は 400 に整形（FK 違反の 500 を避ける advisory）。
@@ -48,7 +55,7 @@ pub async fn update_feed(
             return Err(AppError::Validation("folder not found".into()));
         }
     }
-    repository::update(&state.db, id, title.as_deref(), folder_id).await
+    repository::update(&state.db, id, title.as_deref(), folder_id, priority).await
 }
 
 /// 単一フィードのみ再取得（従来の全件 refresh ではなく当該フィードだけ）。

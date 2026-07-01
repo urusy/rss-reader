@@ -12,7 +12,7 @@ pub async fn insert(pool: &PgPool, url: &str) -> AppResult<Feed> {
     let row = sqlx::query_as::<_, Feed>(
         r#"INSERT INTO feeds (id, url) VALUES ($1, $2)
            ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
-           RETURNING id, url, title, folder_id, created_at, last_fetched_at"#,
+           RETURNING id, url, title, folder_id, created_at, last_fetched_at, priority"#,
     )
     .bind(Uuid::new_v4())
     .bind(url)
@@ -23,7 +23,7 @@ pub async fn insert(pool: &PgPool, url: &str) -> AppResult<Feed> {
 
 pub async fn get(pool: &PgPool, id: FeedId) -> AppResult<Feed> {
     sqlx::query_as::<_, Feed>(
-        r#"SELECT id, url, title, folder_id, created_at, last_fetched_at
+        r#"SELECT id, url, title, folder_id, created_at, last_fetched_at, priority
            FROM feeds WHERE id = $1"#,
     )
     .bind(id.0)
@@ -34,7 +34,7 @@ pub async fn get(pool: &PgPool, id: FeedId) -> AppResult<Feed> {
 
 pub async fn list_all(pool: &PgPool) -> AppResult<Vec<Feed>> {
     let rows = sqlx::query_as::<_, Feed>(
-        r#"SELECT id, url, title, folder_id, created_at, last_fetched_at
+        r#"SELECT id, url, title, folder_id, created_at, last_fetched_at, priority
            FROM feeds ORDER BY created_at DESC"#,
     )
     .fetch_all(pool)
@@ -71,21 +71,25 @@ pub async fn update(
     id: FeedId,
     title: Option<&str>,
     folder_id: Option<Option<FolderId>>,
+    priority: Option<i16>,
 ) -> AppResult<Feed> {
     let touch_folder = folder_id.is_some();
     let folder_val: Option<Uuid> = folder_id.flatten().map(|f| f.0);
     sqlx::query_as::<_, Feed>(
         r#"UPDATE feeds
            SET title     = CASE WHEN $2 THEN $3 ELSE title     END,
-               folder_id = CASE WHEN $4 THEN $5 ELSE folder_id END
+               folder_id = CASE WHEN $4 THEN $5 ELSE folder_id END,
+               priority  = CASE WHEN $6 THEN $7 ELSE priority  END
            WHERE id = $1
-           RETURNING id, url, title, folder_id, created_at, last_fetched_at"#,
+           RETURNING id, url, title, folder_id, created_at, last_fetched_at, priority"#,
     )
     .bind(id.0) // $1 :: uuid（WHERE id = $1）
     .bind(title.is_some()) // $2 :: bool
     .bind(title) // $3 :: text（CASE 結果型が title 列=TEXT から解決）
     .bind(touch_folder) // $4 :: bool
     .bind(folder_val) // $5 :: uuid（CASE 結果型が folder_id 列=UUID から解決）
+    .bind(priority.is_some()) // $6 :: bool
+    .bind(priority) // $7 :: smallint（CASE 結果型が priority 列=SMALLINT から解決）
     .fetch_optional(pool)
     .await?
     .ok_or(AppError::NotFound)

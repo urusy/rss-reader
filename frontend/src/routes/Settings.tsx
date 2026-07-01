@@ -9,6 +9,7 @@ import { useApp } from "@/lib/store";
 import MuteRulesManager from "@/components/mute/MuteRulesManager";
 import LlmSettingsCard from "@/components/settings/LlmSettingsCard";
 import TtsDictCard from "@/components/settings/TtsDictCard";
+import PushSettingsCard from "@/components/settings/PushSettingsCard";
 
 export default function Settings() {
   const [status, { refetch }] = createResource(() => api.getInstapaperStatus());
@@ -239,6 +240,8 @@ export default function Settings() {
       <LlmSettingsCard />
 
       <TtsDictCard />
+
+      <PushSettingsCard />
 
       <Card>
         <CardHeader>

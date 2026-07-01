@@ -44,6 +44,9 @@ pub struct UpdateFeed {
     // 外側 None=キー無し(据え置き) / Some(None)=明示 null(未分類化) / Some(Some)=割当
     #[serde(default, deserialize_with = "double_option")]
     pub folder_id: Option<Option<Uuid>>,
+    // 通知優先度 (#31): 0=通常 / 1=高。キー無し=据え置き。
+    #[serde(default)]
+    pub priority: Option<i16>,
 }
 
 // "キー無し" と "null" を区別するためのヘルパ（serde_with の double_option 相当）。
@@ -63,7 +66,7 @@ pub async fn update(
     Json(body): Json<UpdateFeed>,
 ) -> AppResult<Json<Feed>> {
     let folder_id = body.folder_id.map(|inner| inner.map(FolderId));
-    let feed = service::update_feed(&state, FeedId(id), body.title, folder_id).await?;
+    let feed = service::update_feed(&state, FeedId(id), body.title, folder_id, body.priority).await?;
     Ok(Json(feed))
 }
 

@@ -108,6 +108,16 @@ export default function FeedManage() {
     }
   };
 
+  // #31: 通知優先度 0(通常)⇄1(高) をトグル。高のフィードのみ新着 Web Push 対象。
+  const togglePriority = async (feed: Feed) => {
+    try {
+      await api.setFeedPriority(feed.id, feed.priority >= 1 ? 0 : 1);
+      app.refetchFeeds();
+    } catch (e) {
+      alert(`通知設定の変更に失敗: ${String(e)}`);
+    }
+  };
+
   const deleteFeed = async (feed: Feed) => {
     if (!confirm(`フィード「${feed.title ?? feed.url}」を削除しますか？`)) return;
     try {
@@ -222,6 +232,14 @@ export default function FeedManage() {
                         </For>
                       </select>
                       <div class="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant={feed.priority >= 1 ? "default" : "ghost"}
+                          title="新着を Web Push で通知する優先度（高のみ通知）"
+                          onClick={() => togglePriority(feed)}
+                        >
+                          {feed.priority >= 1 ? "通知 高" : "通知 通常"}
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => renameFeed(feed)}>
                           改名
                         </Button>

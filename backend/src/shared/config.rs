@@ -50,6 +50,11 @@ pub struct AppConfig {
     pub cluster_dup_threshold: f32,
     pub cluster_min_size: i32,
     pub cluster_summary_lang: String,
+    /// Web Push VAPID keys (#31). Both None (unset) = push disabled (503 NotEnabled).
+    /// Public key = base64url uncompressed point (served to the SW as applicationServerKey).
+    /// Private key = base64url raw P-256 scalar (used to sign VAPID JWTs).
+    pub vapid_public_key: Option<String>,
+    pub vapid_private_key: Option<String>,
 }
 
 impl AppConfig {
@@ -155,6 +160,13 @@ impl AppConfig {
         let cluster_summary_lang =
             std::env::var("CLUSTER_SUMMARY_LANG").unwrap_or_else(|_| "ja".to_string());
 
+        let vapid_public_key = std::env::var("VAPID_PUBLIC_KEY")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let vapid_private_key = std::env::var("VAPID_PRIVATE_KEY")
+            .ok()
+            .filter(|v| !v.is_empty());
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -185,6 +197,8 @@ impl AppConfig {
             cluster_dup_threshold,
             cluster_min_size,
             cluster_summary_lang,
+            vapid_public_key,
+            vapid_private_key,
         })
     }
 
@@ -222,6 +236,8 @@ impl AppConfig {
             cluster_dup_threshold: 0.6,
             cluster_min_size: 2,
             cluster_summary_lang: "ja".to_string(),
+            vapid_public_key: None,
+            vapid_private_key: None,
         }
     }
 }

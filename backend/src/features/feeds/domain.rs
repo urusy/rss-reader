@@ -37,6 +37,9 @@ pub struct Feed {
     pub folder_id: Option<FolderId>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_fetched_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// 通知優先度 (#31): 0=通常 / 1=高。高のフィードの新着のみ Web Push で通知する。
+    #[serde(default)]
+    pub priority: i16,
 }
 
 #[cfg(test)]

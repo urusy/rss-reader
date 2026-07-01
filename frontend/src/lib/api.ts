@@ -39,6 +39,8 @@ export interface Feed {
   folder_id: string | null;
   created_at: string;
   last_fetched_at: string | null;
+  // 通知優先度 (#31): 0=通常 / 1=高。高のフィードの新着のみ Web Push 通知。
+  priority: number;
 }
 
 export interface Folder {
@@ -375,11 +377,37 @@ export const api = {
    *   - folder_id: null     => 未分類化（割当解除）
    * 解除は必ず `null` を渡す（undefined はキーが出ず据え置きになる）。
    */
-  updateFeed: (id: string, patch: { title?: string; folder_id?: string | null }) =>
-    http<Feed>(`/api/feeds/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  updateFeed: (
+    id: string,
+    patch: { title?: string; folder_id?: string | null; priority?: number },
+  ) => http<Feed>(`/api/feeds/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  // 通知優先度の更新 (#31): 0=通常 / 1=高。
+  setFeedPriority: (id: string, priority: number) =>
+    http<Feed>(`/api/feeds/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ priority }),
+    }),
   // 当該フィードのみ再取得し、更新後 Feed を返す。
   refreshFeed: (id: string) =>
     http<Feed>(`/api/feeds/${id}/refresh`, { method: "POST" }),
+
+  // --- Web Push 通知 (#31) ---
+  // VAPID 公開鍵（SW 購読時の applicationServerKey）。未設定なら 503。
+  getPushPublicKey: () => http<{ public_key: string }>("/api/push/public-key"),
+  // 購読を登録（endpoint で upsert）。body は PushSubscription.toJSON() 形。
+  subscribePush: (subscription: PushSubscriptionJSON) =>
+    http<void>("/api/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(subscription),
+    }),
+  // endpoint 指定で購読解除。
+  unsubscribePush: (endpoint: string) =>
+    http<void>("/api/push/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify({ endpoint }),
+    }),
+  // 登録済み購読へテスト通知を送る（疎通確認）。
+  testPush: () => http<{ delivered: number }>("/api/push/test", { method: "POST" }),
 
   listFolders: () => http<Folder[]>("/api/folders"),
   createFolder: (name: string) =>
