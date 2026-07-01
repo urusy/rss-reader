@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { htmlToPlainText, splitSentences, createTtsController } from "./tts";
+import {
+  htmlToPlainText,
+  splitSentences,
+  createTtsController,
+  pickBestJaVoice,
+} from "./tts";
 
 // --- speechSynthesis の最小モック（jsdom には無いので自前で用意する） ---
 class MockUtterance {
@@ -172,5 +177,127 @@ describe("createTtsController", () => {
     expect(synth.spoken.length).toBe(0); // 何も speak しない
     expect(onProgress).toHaveBeenLastCalledWith(1);
     expect(ended).toBe(1);
+  });
+});
+
+// P0: onboundary を発火しないニューラル音声でも進捗が前進する時間補間フォールバック。
+describe("createTtsController progress interpolation (P0)", () => {
+  beforeEach(() => {
+    installSynth();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  // 句点の無い 70 文字の単一チャンク（onboundary が来ない前提）。
+  const longText = "あ".repeat(70);
+
+  it("advances progress over time when onboundary never fires", () => {
+    const onProgress = vi.fn();
+    const ctrl = createTtsController(longText, { rate: 1 }, { onProgress });
+    ctrl.play();
+    onProgress.mockClear();
+    vi.advanceTimersByTime(1000); // 約 7 文字ぶん = 0.1
+    expect(onProgress).toHaveBeenCalled();
+    const last = onProgress.mock.calls.at(-1)![0];
+    expect(last).toBeGreaterThan(0);
+    expect(last).toBeLessThan(0.3);
+    ctrl.dispose();
+  });
+
+  it("stops interpolating once a real onboundary fires (boundary wins)", () => {
+    const onProgress = vi.fn();
+    const ctrl = createTtsController(longText, { rate: 1 }, { onProgress });
+    ctrl.play();
+    const u = synth.current!;
+    u.onboundary?.({ charIndex: 35 }); // 正確な位置 = 0.5
+    onProgress.mockClear();
+    vi.advanceTimersByTime(3000); // 補間は無効化済み → 進まない
+    expect(onProgress).not.toHaveBeenCalled();
+    ctrl.dispose();
+  });
+
+  it("freezes interpolation while paused", () => {
+    const onProgress = vi.fn();
+    const ctrl = createTtsController(longText, { rate: 1 }, { onProgress });
+    ctrl.play();
+    ctrl.pause();
+    onProgress.mockClear();
+    vi.advanceTimersByTime(3000);
+    expect(onProgress).not.toHaveBeenCalled();
+    ctrl.dispose();
+  });
+
+  it("clears the interpolation timer on stop", () => {
+    const onProgress = vi.fn();
+    const ctrl = createTtsController(longText, { rate: 1 }, { onProgress });
+    ctrl.play();
+    ctrl.stop();
+    onProgress.mockClear();
+    vi.advanceTimersByTime(3000);
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it("clears the interpolation timer on dispose", () => {
+    const onProgress = vi.fn();
+    const ctrl = createTtsController(longText, { rate: 1 }, { onProgress });
+    ctrl.play();
+    ctrl.dispose();
+    onProgress.mockClear();
+    vi.advanceTimersByTime(3000);
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+});
+
+// P1: 環境で最良の日本語音声を自動選択する。
+describe("pickBestJaVoice (P1)", () => {
+  const voice = (p: Partial<SpeechSynthesisVoice>): SpeechSynthesisVoice =>
+    ({
+      name: "",
+      lang: "",
+      voiceURI: p.name ?? "",
+      localService: true,
+      default: false,
+      ...p,
+    }) as SpeechSynthesisVoice;
+
+  it("returns null when there is no Japanese voice", () => {
+    expect(
+      pickBestJaVoice([
+        voice({ name: "Samantha", lang: "en-US" }),
+        voice({ name: "Daniel", lang: "en-GB" }),
+      ]),
+    ).toBeNull();
+  });
+
+  it("prefers a neural/natural ja voice over the OS default Kyoko", () => {
+    const best = pickBestJaVoice([
+      voice({ name: "Kyoko", lang: "ja-JP" }),
+      voice({ name: "Microsoft Nanami Online (Natural)", lang: "ja-JP" }),
+    ]);
+    expect(best?.name).toBe("Microsoft Nanami Online (Natural)");
+  });
+
+  it("prefers an online (localService=false) ja voice when none are labelled natural", () => {
+    const best = pickBestJaVoice([
+      voice({ name: "Kyoko", lang: "ja-JP", localService: true }),
+      voice({ name: "Google 日本語", lang: "ja-JP", localService: false }),
+    ]);
+    expect(best?.name).toBe("Google 日本語");
+  });
+
+  it("ignores non-ja voices even if they look natural", () => {
+    const best = pickBestJaVoice([
+      voice({ name: "Ava (Natural)", lang: "en-US", localService: false }),
+      voice({ name: "Kyoko", lang: "ja-JP" }),
+    ]);
+    expect(best?.name).toBe("Kyoko");
+  });
+
+  it("falls back to the only available ja voice", () => {
+    const best = pickBestJaVoice([voice({ name: "O-ren", lang: "ja-JP" })]);
+    expect(best?.name).toBe("O-ren");
   });
 });

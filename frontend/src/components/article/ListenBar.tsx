@@ -9,6 +9,7 @@ import {
 import {
   createTtsController,
   loadVoices,
+  pickBestJaVoice,
   ttsSupported,
   type TtsController,
   type TtsState,
@@ -70,8 +71,13 @@ export default function ListenBar(props: {
     void loadVoices().then(setVoices);
   });
 
-  const pickedVoice = () =>
-    voices().find((v) => v.voiceURI === voiceUri()) ?? null;
+  // 声が明示選択されていればそれを、未選択（"" ＝おまかせ）なら環境で最良の
+  // 日本語音声を自動選択する。OS 既定（Mac の Kyoko 等）の機械的な声を避ける。
+  const pickedVoice = () => {
+    const uri = voiceUri();
+    if (uri) return voices().find((v) => v.voiceURI === uri) ?? null;
+    return pickBestJaVoice(voices());
+  };
 
   // 選択中のソース（消えていれば先頭にフォールバック）。
   const current = () =>
@@ -273,9 +279,18 @@ export default function ListenBar(props: {
           value={voiceUri()}
           onChange={(e) => onVoice(e.currentTarget.value)}
         >
-          <option value="">既定の声</option>
+          <option value="">自動（おすすめ）</option>
           <For each={voices()}>
-            {(v) => <option value={v.voiceURI}>{v.name}</option>}
+            {(v) => (
+              <option value={v.voiceURI}>
+                {v.name}
+                {/^ja/i.test(v.lang) &&
+                (/natural|neural|enhanced|premium/i.test(v.name) ||
+                  v.localService === false)
+                  ? "（自然）"
+                  : ""}
+              </option>
+            )}
           </For>
         </select>
       </Show>

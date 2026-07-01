@@ -39,6 +39,10 @@ services:
       # Semantic clustering (#26). Off unless CLUSTERING_ENABLED=true.
       CLUSTERING_ENABLED: ${CLUSTERING_ENABLED:-}
       CLUSTERING_INTERVAL_SECS: ${CLUSTERING_INTERVAL_SECS:-}
+      # Web Push (#31). Both unset = /api/push/* returns 503 (feature disabled).
+      # Generate with scripts/gen-vapid.sh and put into .env. Never commit keys.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
     depends_on:
       db:
