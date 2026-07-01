@@ -30,9 +30,6 @@ sqlx = { version = "0.8", features = [
 feed-rs = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip", "brotli"] }
 
-# Web Push 通知 (#31)。hyper-client を選び libcurl/openssl(isahc) を避け rustls/hyper スタックに寄せる。
-web-push = { version = "0.11", features = ["hyper-client"], default-features = false }
-
 # Error handling
 thiserror = "2"
 anyhow = "1"
@@ -52,6 +49,13 @@ ammonia = "4.1.3"
 # html_to_plain_text で DOM を traverse するため直接依存として明示する。
 ego-tree = "0.11"
 quick-xml = "0.41.0"
+
+# Web Push 通知 (#31)。純Rust実装（RFC8291 ece-native + VAPID/p256、jwt-simple は
+# superboring=純Rust）。openssl 非依存。メッセージ組み立てのみ担い、送信は既存
+# reqwest(rustls) で行う（http crate は 1.x で reqwest/axum と共通）。
+web-push-native = "0.4"
+# VAPID 鍵・購読鍵の base64url(no pad) デコード用（web-push-native と同じ実装）。
+base64ct = { version = "1", features = ["alloc"] }
 
 [profile.release]
 opt-level = 3
