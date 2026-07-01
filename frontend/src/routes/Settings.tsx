@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useApp } from "@/lib/store";
 import MuteRulesManager from "@/components/mute/MuteRulesManager";
+import LlmSettingsCard from "@/components/settings/LlmSettingsCard";
+import TtsDictCard from "@/components/settings/TtsDictCard";
 
 export default function Settings() {
   const [status, { refetch }] = createResource(() => api.getInstapaperStatus());
@@ -233,6 +235,10 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <LlmSettingsCard />
+
+      <TtsDictCard />
 
       <Card>
         <CardHeader>

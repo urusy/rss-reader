@@ -11,6 +11,7 @@ export type TtsState = "idle" | "playing" | "paused";
 export interface TtsCallbacks {
   onState?: (state: TtsState) => void;
   onProgress?: (ratio: number) => void; // 0..1
+  onChunk?: (idx: number, count: number) => void; // チャンク（文）開始通知。位置保存用。
   onEnd?: () => void;
 }
 
@@ -59,7 +60,7 @@ export function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 
 export interface TtsController {
   state: () => TtsState;
-  play: () => void;
+  play: (fromChunk?: number) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -110,10 +111,17 @@ export function createTtsController(
       return;
     }
     idx = i;
+    // これから読む文の index を通知（105 行で disposed は早期 return 済み）。
+    // 完了 terminal 分岐（i>=length）は idx=i の前に return するので発火しない
+    // ＝ chunk===count は保存されず、クリアは onEnd が担う。
+    cb.onChunk?.(i, chunks.length);
     const u = new SpeechSynthesisUtterance(chunks[i]);
     if (opts.rate) u.rate = opts.rate;
     if (opts.voice) u.voice = opts.voice;
-    u.onboundary = (e) => report(e.charIndex ?? 0);
+    // dispose 済みコントローラの遅延 onboundary が進捗を汚さないようガード。
+    u.onboundary = (e) => {
+      if (!disposed) report(e.charIndex ?? 0);
+    };
     u.onend = () => {
       if (!disposed && state === "playing") speakFrom(i + 1);
     };
@@ -122,10 +130,14 @@ export function createTtsController(
 
   return {
     state: () => state,
-    play: () => {
+    play: (fromChunk = 0) => {
+      // pause 中に別ソースへ切替えて再生した場合、cancel→speak だけだと
+      // エンジンが paused のまま無音固着する（Chrome 既知）。先に解除する。
+      if (synth.paused) synth.resume();
       synth.cancel(); // 前の発話をクリア
       setState("playing");
-      speakFrom(0);
+      // fromChunk >= length は terminal 分岐で即 onProgress(1)+onEnd（clamp しない）。
+      speakFrom(fromChunk);
     },
     pause: () => {
       if (state === "playing") {
