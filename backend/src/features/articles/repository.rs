@@ -40,6 +40,7 @@ pub async fn list(
     unread_only: bool,
     folder_id: Option<FolderId>,
     unclassified: bool,
+    include_muted: bool,
 ) -> AppResult<Vec<Article>> {
     let rows = sqlx::query_as::<_, Article>(
         r#"SELECT * FROM articles
@@ -49,6 +50,7 @@ pub async fn list(
                   OR feed_id IN (SELECT id FROM feeds WHERE folder_id = $3))
              AND ($4 = false
                   OR feed_id IN (SELECT id FROM feeds WHERE folder_id IS NULL))
+             AND ($5 = true OR muted_at IS NULL)
            ORDER BY published_at DESC NULLS LAST, created_at DESC
            LIMIT 200"#,
     )
@@ -56,6 +58,7 @@ pub async fn list(
     .bind(unread_only)
     .bind(folder_id.map(|f| f.0))
     .bind(unclassified)
+    .bind(include_muted)
     .fetch_all(pool)
     .await?;
     Ok(rows)
@@ -133,4 +136,141 @@ pub async fn save_translation(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Clear a cached summary (set it and its language back to NULL) so the user
+/// can discard a stale/garbled result. NotFound if the article doesn't exist.
+pub async fn clear_summary(pool: &PgPool, id: ArticleId) -> AppResult<()> {
+    let res = sqlx::query("UPDATE articles SET summary = NULL, summary_lang = NULL WHERE id = $1")
+        .bind(id.0)
+        .execute(pool)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
+/// Clear a cached translation (mirrors `clear_summary`).
+pub async fn clear_translation(pool: &PgPool, id: ArticleId) -> AppResult<()> {
+    let res =
+        sqlx::query("UPDATE articles SET translation = NULL, translation_lang = NULL WHERE id = $1")
+            .bind(id.0)
+            .execute(pool)
+            .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
+/// Cache the extracted full body. Only called on a successful extraction; on
+/// failure the caller leaves full_content NULL so AI/display fall back to
+/// `content`. Called from the `extraction` slice (same-aggregate write, mirrors
+/// how `feeds` writes articles via `upsert`).
+pub async fn save_full_content(pool: &PgPool, id: ArticleId, full_content: &str) -> AppResult<()> {
+    let res = sqlx::query(
+        r#"UPDATE articles
+           SET full_content = $2, extracted_at = now()
+           WHERE id = $1"#,
+    )
+    .bind(id.0)
+    .bind(full_content)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
+/// Set an article's author by url, only when not already set (crawl populates it
+/// for the rules engine #28; additive, same articles aggregate).
+pub async fn set_author(pool: &PgPool, url: &str, author: &str) -> AppResult<()> {
+    sqlx::query("UPDATE articles SET author = $2 WHERE url = $1 AND author IS NULL")
+        .bind(url)
+        .bind(author)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Look up an article id by its (unique) url. Used by crawl-time auto-extraction
+/// since `upsert` does not return the id.
+pub async fn id_by_url(pool: &PgPool, url: &str) -> AppResult<Option<ArticleId>> {
+    let row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM articles WHERE url = $1")
+        .bind(url)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(id,)| ArticleId(id)))
+}
+
+#[cfg(test)]
+mod tests {
+    //! Round-trip tests against a real DB. Run with:
+    //!   DATABASE_URL=... cargo test -- --ignored
+    //! Requires migrations applied (`just dev-db` / `just migrate`).
+    use super::*;
+    use crate::features::feeds::domain::FeedUrl;
+    use crate::features::feeds::repository as feeds_repo;
+
+    async fn pool() -> PgPool {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL");
+        PgPool::connect(&url).await.expect("connect")
+    }
+
+    async fn a_feed(pool: &PgPool) -> FeedId {
+        // Unique url per run to avoid clashing with other tests / existing rows.
+        let raw = format!("https://example.com/extraction-test/{}", Uuid::new_v4());
+        let url = FeedUrl::parse(&raw).expect("feed url");
+        let feed = feeds_repo::insert(pool, url.as_str())
+            .await
+            .expect("insert feed");
+        FeedId(feed.id.0)
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL"]
+    async fn save_full_content_sets_full_content_and_extracted_at() {
+        let pool = pool().await;
+        let feed_id = a_feed(&pool).await;
+        let url = format!("https://example.com/post/{}", Uuid::new_v4());
+        upsert(&pool, feed_id, &url, "t", "feed excerpt", None)
+            .await
+            .unwrap();
+        let id = id_by_url(&pool, &url).await.unwrap().expect("id");
+
+        let before = get(&pool, id).await.unwrap();
+        assert!(before.full_content.is_none());
+        assert!(before.extracted_at.is_none());
+
+        save_full_content(&pool, id, "<p>extracted body</p>")
+            .await
+            .unwrap();
+
+        let after = get(&pool, id).await.unwrap();
+        assert_eq!(after.full_content.as_deref(), Some("<p>extracted body</p>"));
+        assert!(after.extracted_at.is_some());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL"]
+    async fn save_full_content_missing_id_is_not_found() {
+        let pool = pool().await;
+        let res = save_full_content(&pool, ArticleId(Uuid::new_v4()), "x").await;
+        assert!(matches!(res, Err(AppError::NotFound)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL"]
+    async fn id_by_url_roundtrip() {
+        let pool = pool().await;
+        let feed_id = a_feed(&pool).await;
+        let url = format!("https://example.com/post/{}", Uuid::new_v4());
+        upsert(&pool, feed_id, &url, "t", "c", None).await.unwrap();
+
+        assert!(id_by_url(&pool, &url).await.unwrap().is_some());
+        let missing = format!("https://example.com/nope/{}", Uuid::new_v4());
+        assert!(id_by_url(&pool, &missing).await.unwrap().is_none());
+    }
 }

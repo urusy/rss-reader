@@ -1,6 +1,13 @@
-import { createResource, createSignal, For, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  Show,
+} from "solid-js";
 import { useSearchParams } from "@solidjs/router";
-import { api } from "@/lib/api";
+import { api, errorStatus } from "@/lib/api";
 import { useSelection } from "@/lib/selection";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -23,24 +30,65 @@ export default function ArticleList() {
       ? searchParams.article[0]
       : searchParams.article;
 
-  const params = () => {
-    const s = scope();
-    const unread = app.state.filter === "unread" ? true : undefined;
-    if (s.kind === "feed") return { feed_id: s.feedId, unread };
+  // scope と未読フィルタを依存にしたソース。view scope のときだけ resolver を呼ぶ。
+  const source = () => ({
+    s: scope(),
+    unread: app.state.filter === "unread" ? true : undefined,
+  });
+
+  const [articles, { refetch }] = createResource(source, async ({ s, unread }) => {
+    if (s.kind === "view")
+      return api.resolveSavedView(s.viewId, unread || undefined);
+    if (s.kind === "feed")
+      return api.listArticles({ feed_id: s.feedId, unread });
     if (s.kind === "folder")
       return s.folderId === "unclassified"
-        ? { unclassified: true, unread }
-        : { folder_id: s.folderId, unread };
-    return { unread };
-  };
-
-  const [articles, { refetch }] = createResource(params, (p) =>
-    api.listArticles(p),
-  );
+        ? api.listArticles({ unclassified: true, unread })
+        : api.listArticles({ folder_id: s.folderId, unread });
+    return api.listArticles({ unread });
+  });
   const [stats, { refetch: refetchStats }] = createResource(() =>
     api.getStats(),
   );
   const [marking, setMarking] = createSignal(false);
+
+  // --- 関連度スコア (#25): スコア結合 + 重要順ソート（articles 不変・クライアント側） ---
+  const [scoring, setScoring] = createSignal(false);
+  const scoreById = createMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of app.relevanceScores() ?? []) m.set(s.article_id, s.score);
+    return m;
+  });
+  const sorted = createMemo(() => {
+    const list = articles() ?? [];
+    if (app.state.sort !== "relevance") return list;
+    const m = scoreById();
+    return list.slice().sort((a, b) => (m.get(b.id) ?? -1) - (m.get(a.id) ?? -1));
+  });
+  const runScoring = async () => {
+    setScoring(true);
+    try {
+      await api.scoreRelevance();
+      app.refetchRelevanceScores();
+      app.setSort("relevance");
+    } catch (e) {
+      const code = errorStatus(e);
+      alert(
+        code === 503
+          ? "ANTHROPIC_API_KEY が未設定です。"
+          : code === 502
+            ? "スコアリングに失敗しました。"
+            : `エラー: ${String(e)}`,
+      );
+    } finally {
+      setScoring(false);
+    }
+  };
+
+  // 現在の表示順を store に公開（キーボード j/k/o/Enter の移動対象。#18）。
+  createEffect(() => {
+    app.setNavItems((sorted() ?? []).map((a) => ({ id: a.id, url: a.url })));
+  });
 
   // 行選択: ?article を立てて右ペインへ。既読化は本文側の滞在/スクロール起点で行うため、
   // ここでは楽観的に既読にしない。実既読になったら store.readIds 経由でグレーアウトする。
@@ -65,22 +113,41 @@ export default function ArticleList() {
 
   return (
     <div class="space-y-4 p-4">
-      <div class="flex items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <Badge variant={(stats()?.unread ?? 0) > 0 ? "unread" : "default"}>
           未読 {stats()?.unread ?? 0} 件
         </Badge>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={markAll}
-          disabled={marking() || (articles()?.length ?? 0) === 0}
-        >
-          {marking()
-            ? "既読化中…"
-            : scope().kind === "feed"
-              ? "このフィードを既読"
-              : "すべて既読"}
-        </Button>
+        <div class="flex flex-wrap items-center gap-1">
+          <Button
+            size="sm"
+            variant={app.state.sort === "relevance" ? "default" : "outline"}
+            onClick={() =>
+              app.setSort(
+                app.state.sort === "relevance" ? "newest" : "relevance",
+              )
+            }
+            title="新着順 / 重要順を切り替え"
+          >
+            {app.state.sort === "relevance" ? "重要順" : "新着順"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={runScoring} disabled={scoring()}>
+            {scoring() ? "スコア中…" : "スコアリング"}
+          </Button>
+          <Show when={scope().kind !== "view"}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={markAll}
+              disabled={marking() || (articles()?.length ?? 0) === 0}
+            >
+              {marking()
+                ? "既読化中…"
+                : scope().kind === "feed"
+                  ? "このフィードを既読"
+                  : "すべて既読"}
+            </Button>
+          </Show>
+        </div>
       </div>
 
       <Show
@@ -92,7 +159,7 @@ export default function ArticleList() {
           fallback={<p class="text-sm text-muted-foreground">記事がありません。</p>}
         >
           <div class="divide-y divide-border">
-            <For each={articles()}>
+            <For each={sorted()}>
               {(a) => (
                 <button
                   type="button"
@@ -102,16 +169,21 @@ export default function ArticleList() {
                     selectedId() === a.id && "bg-accent",
                   )}
                 >
-                  <p
-                    class={cn(
-                      "line-clamp-2 text-sm",
-                      a.is_read || app.state.readIds[a.id]
-                        ? "font-normal text-muted-foreground"
-                        : "font-semibold text-foreground",
-                    )}
-                  >
-                    {a.title}
-                  </p>
+                  <div class="flex items-start justify-between gap-2">
+                    <p
+                      class={cn(
+                        "line-clamp-2 text-sm",
+                        a.is_read || app.state.readIds[a.id]
+                          ? "font-normal text-muted-foreground"
+                          : "font-semibold text-foreground",
+                      )}
+                    >
+                      {a.title}
+                    </p>
+                    <Show when={scoreById().has(a.id)}>
+                      <Badge>{Math.round((scoreById().get(a.id) ?? 0) * 100)}%</Badge>
+                    </Show>
+                  </div>
                   <Show when={a.summary}>
                     <p class="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
                       {a.summary}

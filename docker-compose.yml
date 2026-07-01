@@ -25,6 +25,20 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       FEED_REFRESH_INTERVAL_SECS: ${FEED_REFRESH_INTERVAL_SECS:-900}
+      # Auth: unset = disabled (LAN default). Set to require Bearer token on /api.
+      AUTH_TOKEN: ${AUTH_TOKEN:-}
+      # Backup: unset = /api/backup/* returns 503. Optional pg_dump scheduler off
+      # unless BACKUP_DIR + interval are both set.
+      BACKUP_TOKEN: ${BACKUP_TOKEN:-}
+      BACKUP_DIR: ${BACKUP_DIR:-}
+      BACKUP_PGDUMP_INTERVAL_SECS: ${BACKUP_PGDUMP_INTERVAL_SECS:-}
+      # Daily AI digest (#23). Off unless DIGEST_ENABLED=true; SMTP optional.
+      DIGEST_ENABLED: ${DIGEST_ENABLED:-}
+      DIGEST_HOUR_UTC: ${DIGEST_HOUR_UTC:-}
+      DIGEST_LANG: ${DIGEST_LANG:-}
+      # Semantic clustering (#26). Off unless CLUSTERING_ENABLED=true.
+      CLUSTERING_ENABLED: ${CLUSTERING_ENABLED:-}
+      CLUSTERING_INTERVAL_SECS: ${CLUSTERING_INTERVAL_SECS:-}
       RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
     depends_on:
       db:

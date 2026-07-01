@@ -1,5 +1,11 @@
 import { createMemo, createResource, createSignal, For, Show } from "solid-js";
-import { api, type Feed, type FeedOverview, type Folder } from "@/lib/api";
+import {
+  api,
+  type Feed,
+  type FeedHealth,
+  type FeedOverview,
+  type Folder,
+} from "@/lib/api";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +23,9 @@ export default function FeedManage() {
   const [overview, { refetch: refetchOverview }] = createResource(() =>
     api.listFeedOverview(),
   );
+  const [health, { refetch: refetchHealth }] = createResource(() =>
+    api.listFeedHealth(),
+  );
   const [newFolder, setNewFolder] = createSignal("");
 
   const overviewById = createMemo(
@@ -25,11 +34,15 @@ export default function FeedManage() {
         (overview() ?? []).map((o) => [o.feed_id, o]),
       ),
   );
+  const healthById = createMemo(
+    () =>
+      new Map<string, FeedHealth>((health() ?? []).map((h) => [h.feed_id, h])),
+  );
 
   const refetchAll = async () => {
     app.refetchFeeds();
     app.refetchFolders();
-    await refetchOverview();
+    await Promise.all([refetchOverview(), refetchHealth()]);
   };
 
   const createFolder = async () => {
@@ -92,6 +105,16 @@ export default function FeedManage() {
       await refetchAll();
     } catch (e) {
       alert(`再取得に失敗: ${String(e)}`);
+    }
+  };
+
+  // #31: 通知優先度 0(通常)⇄1(高) をトグル。高のフィードのみ新着 Web Push 対象。
+  const togglePriority = async (feed: Feed) => {
+    try {
+      await api.setFeedPriority(feed.id, feed.priority >= 1 ? 0 : 1);
+      app.refetchFeeds();
+    } catch (e) {
+      alert(`通知設定の変更に失敗: ${String(e)}`);
     }
   };
 
@@ -173,6 +196,22 @@ export default function FeedManage() {
                       <Show when={(o()?.unread_count ?? 0) > 0}>
                         <Badge variant="unread">未読 {o()?.unread_count}</Badge>
                       </Show>
+                      {(() => {
+                        const h = healthById().get(feed.id);
+                        if (!h || h.health === "healthy") return null;
+                        return h.health === "dead" ? (
+                          <Badge
+                            variant="dead"
+                            title={h.last_error ?? "取得に連続失敗しています"}
+                          >
+                            取得失敗 {h.consecutive_failures}回
+                          </Badge>
+                        ) : (
+                          <Badge variant="stale" title="投稿が長期間途絶えています">
+                            更新停滞
+                          </Badge>
+                        );
+                      })()}
                     </div>
                     <p class="truncate text-xs text-muted-foreground">{feed.url}</p>
                     <p class="text-xs text-muted-foreground">
@@ -193,6 +232,14 @@ export default function FeedManage() {
                         </For>
                       </select>
                       <div class="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant={feed.priority >= 1 ? "default" : "ghost"}
+                          title="新着を Web Push で通知する優先度（高のみ通知）"
+                          onClick={() => togglePriority(feed)}
+                        >
+                          {feed.priority >= 1 ? "通知 高" : "通知 通常"}
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => renameFeed(feed)}>
                           改名
                         </Button>

@@ -8,24 +8,34 @@ import ArticleView from "./routes/ArticleView";
 import Search from "./routes/Search";
 import Settings from "./routes/Settings";
 import FeedManage from "./routes/FeedManage";
+import Digest from "./routes/Digest";
+import Clusters from "./routes/Clusters";
+import Rules from "./routes/Rules";
 import NotFound from "./routes/NotFound";
 import { initTheme } from "./lib/theme";
+import { initTtsDict } from "./lib/tts-dict-store";
+import { registerServiceWorker } from "./lib/push";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
 
 initTheme(); // render 前に <html> へ dark クラス + color-scheme を同期適用
+initTtsDict(); // 読み上げユーザー辞書を localStorage から読み込む
+void registerServiceWorker(); // #31 Web Push 用 SW を登録（対応ブラウザのみ・非対応は no-op）
 
 render(
   () => (
     <Router root={App}>
       <Route
-        path={["/", "/feeds/:feedId", "/folders/:folderId"]}
+        path={["/", "/feeds/:feedId", "/folders/:folderId", "/views/:viewId"]}
         component={Reader}
       />
       <Route path="/articles/:id" component={ArticleView} />
       <Route path="/search" component={Search} />
       <Route path="/manage" component={FeedManage} />
+      <Route path="/digest" component={Digest} />
+      <Route path="/clusters" component={Clusters} />
+      <Route path="/rules" component={Rules} />
       <Route path="/settings" component={Settings} />
       <Route path="*" component={NotFound} />
     </Router>

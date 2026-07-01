@@ -1,5 +1,6 @@
 import {
   createEffect,
+  createMemo,
   createResource,
   createSignal,
   onCleanup,
@@ -15,6 +16,11 @@ import {
   scrolledEnough,
 } from "@/lib/read-trigger";
 import { Button } from "@/components/ui/button";
+import ArticleAsk from "@/components/article/ArticleAsk";
+import { StarToggle, Highlights } from "@/components/article/Annotations";
+import ListenBar, { type ListenSource } from "@/components/article/ListenBar";
+import { htmlToPlainText } from "@/lib/tts";
+import TagEditor from "@/components/TagEditor";
 
 /**
  * 記事本文の描画（要約/翻訳/後で読む/自動既読）。id を prop で受け、
@@ -23,7 +29,13 @@ import { Button } from "@/components/ui/button";
 export default function ArticleDetail(props: { id: string | undefined }) {
   const app = useApp();
   const [article, { mutate }] = createResource(() => props.id, api.getArticle);
-  const [busy, setBusy] = createSignal<"summarize" | "translate" | null>(null);
+  const [busy, setBusy] = createSignal<
+    "summarize" | "translate" | "extract" | null
+  >(null);
+  // 全文取得後に「抜粋/全文」を見比べるためのローカル状態。
+  const [showExcerpt, setShowExcerpt] = createSignal(false);
+  // 抽出を試みたが本文が薄く取得できなかった時のヒント。
+  const [extractMiss, setExtractMiss] = createSignal(false);
   let articleEl: HTMLElement | undefined;
 
   // 後で読む（Instapaper）の保存状態。null = 未保存。
@@ -61,21 +73,25 @@ export default function ArticleDetail(props: { id: string | undefined }) {
   // onCleanup でタイマー/リスナを破棄するので、すぐ離れた記事は既読にならない。
   // marked は意図的に非リアクティブ（signal にすると effect 依存に入り二重 POST を招く）。
   let marked: string | undefined;
+  // 滞在/スクロール（下）と読み上げ進捗（#33 ListenBar）から共通で呼ぶ既読化。
+  // marked ガードで一度きり。リッスンモードで「聴いて消化」した記事も既読になる。
+  const markReadNow = (id: string) => {
+    if (marked === id) return;
+    marked = id;
+    api
+      .markRead(id, true)
+      .then(() => mutate((prev) => (prev ? { ...prev, is_read: true } : prev)))
+      .catch((e) => console.error("auto mark-read failed", e));
+    app.markReadLocal(id); // 一覧ペインのグレーアウトを実既読に追従させる
+  };
+
   createEffect(() => {
     const a = article();
     // a.id !== props.id: 記事切替の読み込み中に前記事の値が一瞬返ってもアームしない。
     if (!a || a.is_read || a.id !== props.id || marked === a.id) return;
     const id = a.id;
 
-    const doMark = () => {
-      if (marked === id) return;
-      marked = id;
-      api
-        .markRead(id, true)
-        .then(() => mutate((prev) => (prev ? { ...prev, is_read: true } : prev)))
-        .catch((e) => console.error("auto mark-read failed", e));
-      app.markReadLocal(id); // 一覧ペインのグレーアウトを実既読に追従させる
-    };
+    const doMark = () => markReadNow(id);
 
     const timer = setTimeout(doMark, DWELL_MS);
     const scroller = articleEl ? findScrollParent(articleEl) : window;
@@ -89,21 +105,104 @@ export default function ArticleDetail(props: { id: string | undefined }) {
     });
   });
 
-  const run = async (kind: "summarize" | "translate") => {
+  // force=true でキャッシュを無視して再生成（設定でモデル/プロンプトを変えた後の作り直し）。
+  const run = async (kind: "summarize" | "translate", force = false) => {
     const id = props.id;
     if (!id) return;
     setBusy(kind);
     try {
       const updated: Article =
         kind === "summarize"
-          ? await api.summarize(id, "ja")
-          : await api.translate(id, "ja");
+          ? await api.summarize(id, "ja", force)
+          : await api.translate(id, "ja", force);
       mutate(updated);
     } catch (e) {
       alert(`処理に失敗しました: ${String(e)}`);
     } finally {
       setBusy(null);
     }
+  };
+
+  // 古い/壊れた要約・翻訳のキャッシュを破棄（HTML 混入した旧結果の掃除など）。
+  const [clearing, setClearing] = createSignal<"summary" | "translation" | null>(
+    null,
+  );
+  const clear = async (kind: "summary" | "translation") => {
+    const id = props.id;
+    if (!id) return;
+    setClearing(kind);
+    try {
+      if (kind === "summary") {
+        await api.deleteSummary(id);
+        mutate((prev) =>
+          prev ? { ...prev, summary: null, summary_lang: null } : prev,
+        );
+      } else {
+        await api.deleteTranslation(id);
+        mutate((prev) =>
+          prev ? { ...prev, translation: null, translation_lang: null } : prev,
+        );
+      }
+    } catch (e) {
+      alert(`削除に失敗しました: ${String(e)}`);
+    } finally {
+      setClearing(null);
+    }
+  };
+
+  // サーバ側で本文を抽出して full_content をキャッシュ。null のまま返れば抜粋にフォールバック。
+  const extract = async () => {
+    const id = props.id;
+    if (!id) return;
+    setBusy("extract");
+    setExtractMiss(false);
+    try {
+      const updated = await api.extractArticle(id);
+      mutate(updated);
+      if (!updated.full_content) setExtractMiss(true);
+      else setShowExcerpt(false);
+    } catch (e) {
+      alert(`全文の取得に失敗しました: ${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // 表示する本文 HTML: 全文があり「抜粋表示」でなければ全文、無ければ content。
+  // バックエンドで浄化済みでも多層防御で必ず再サニタイズする（既存方針）。
+  const bodyHtml = (a: Article) => {
+    const useFull = a.full_content && !showExcerpt();
+    return sanitizeArticleHtml(useFull ? a.full_content! : a.content);
+  };
+
+  // 本文の平文化は listenSources から複数回・a() の任意変化で評価されるため、
+  // DOMParser 再パースを避けて createMemo で 1 回化する。
+  const bodyPlain = createMemo(() => {
+    const a = article();
+    return a ? htmlToPlainText(bodyHtml(a)) : "";
+  });
+
+  // 読み上げソース（本文/要約/翻訳）。要約・翻訳は backend で平文化済みの契約なので
+  // htmlToPlainText を通さない。本文（bodyHtml=sanitized HTML）だけ平文化する。
+  const listenSources = (): ListenSource[] => {
+    const a = article();
+    if (!a) return [];
+    return [
+      { key: "body", label: "本文", text: bodyPlain(), marksRead: true },
+      ...(a.summary
+        ? [{ key: "summary", label: "要約", text: a.summary, marksRead: false }]
+        : []),
+      ...(a.translation
+        ? [
+            {
+              key: "translation",
+              label: "翻訳",
+              text: a.translation,
+              marksRead: false,
+            },
+          ]
+        : []),
+    ];
   };
 
   return (
@@ -125,17 +224,30 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             </a>
           </header>
 
-          <div class="flex gap-2">
-            <Button size="sm" onClick={() => run("summarize")} disabled={busy() !== null}>
-              {busy() === "summarize" ? "要約中…" : "要約 (Claude)"}
+          <div class="flex flex-wrap gap-2">
+            <StarToggle articleId={a().id} />
+            <Button
+              size="sm"
+              onClick={() => run("summarize", !!a().summary)}
+              disabled={busy() !== null}
+            >
+              {busy() === "summarize"
+                ? "要約中…"
+                : a().summary
+                  ? "再要約 (Claude)"
+                  : "要約 (Claude)"}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => run("translate")}
+              onClick={() => run("translate", !!a().translation)}
               disabled={busy() !== null}
             >
-              {busy() === "translate" ? "翻訳中…" : "翻訳 (Claude)"}
+              {busy() === "translate"
+                ? "翻訳中…"
+                : a().translation
+                  ? "再翻訳 (Claude)"
+                  : "翻訳 (Claude)"}
             </Button>
             <Button
               size="sm"
@@ -151,7 +263,35 @@ export default function ArticleDetail(props: { id: string | undefined }) {
                     ? "再試行"
                     : "後で読む"}
             </Button>
+            {/* 全文未取得なら「全文を取得」、取得済みなら抜粋/全文トグル。 */}
+            <Show
+              when={a().full_content}
+              fallback={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={extract}
+                  disabled={busy() !== null}
+                >
+                  {busy() === "extract" ? "取得中…" : "全文を取得"}
+                </Button>
+              }
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowExcerpt((v) => !v)}
+              >
+                {showExcerpt() ? "全文を表示" : "抜粋を表示"}
+              </Button>
+            </Show>
           </div>
+
+          <Show when={extractMiss()}>
+            <p class="text-xs text-muted-foreground">
+              全文を取得できませんでした（抜粋を表示中）。
+            </p>
+          </Show>
 
           <Show when={later()?.status === "failed" && later()?.last_error}>
             <p class="text-xs text-muted-foreground">保存に失敗: {later()?.last_error}</p>
@@ -159,8 +299,19 @@ export default function ArticleDetail(props: { id: string | undefined }) {
 
           <Show when={a().summary}>
             <section class="rounded-lg border border-border bg-muted/40 p-4">
-              <h2 class="text-sm font-semibold mb-1">要約</h2>
-              {/* prose は本文/翻訳と基本タイポを揃えるため（要約はテキストノードのため Markdown は描画されない） */}
+              <div class="mb-1 flex items-center justify-between gap-2">
+                <h2 class="text-sm font-semibold">要約</h2>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => clear("summary")}
+                  disabled={clearing() !== null}
+                >
+                  {clearing() === "summary" ? "削除中…" : "削除"}
+                </Button>
+              </div>
+              {/* 要約・翻訳は plain text 契約（backend で HTML 除去済み）なので text node で安全に表示。
+                  prose は本文/翻訳と基本タイポを揃えるため。Markdown は描画されない。 */}
               <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
                 {a().summary}
               </div>
@@ -169,19 +320,47 @@ export default function ArticleDetail(props: { id: string | undefined }) {
 
           <Show when={a().translation}>
             <section class="rounded-lg border border-border bg-muted/40 p-4">
-              <h2 class="text-sm font-semibold mb-1">翻訳</h2>
+              <div class="mb-1 flex items-center justify-between gap-2">
+                <h2 class="text-sm font-semibold">翻訳</h2>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => clear("translation")}
+                  disabled={clearing() !== null}
+                >
+                  {clearing() === "translation" ? "削除中…" : "削除"}
+                </Button>
+              </div>
               <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
                 {a().translation}
               </div>
             </section>
           </Show>
 
-          {/* フィード本文は信頼できない HTML。innerHTML 前に必ず浄化する
-              （埋め込み <style> によるレイアウト破壊・XSS 対策）。 */}
+          {/* リッスンモード（#33 v1）: 本文/要約/翻訳をソース切替で読み上げ。
+              本文のみ進捗 80% で既読化（markReadNow）に繋ぐ。バックエンド非依存。 */}
+          <ListenBar
+            articleId={a().id}
+            sources={listenSources}
+            onListened={() => markReadNow(a().id)}
+          />
+
+          {/* 本文は信頼できない HTML。innerHTML 前に必ず浄化する
+              （埋め込み <style> によるレイアウト破壊・XSS 対策）。
+              full_content があれば優先表示（抜粋トグル時は content）。 */}
           <div
             class="prose prose-sm dark:prose-invert max-w-none"
-            innerHTML={sanitizeArticleHtml(a().content)}
+            innerHTML={bodyHtml(a())}
           />
+
+          {/* タグ編集 + AI 提案（#24） */}
+          <TagEditor articleId={a().id} />
+
+          {/* ハイライト / 注釈（#32）: 本文選択 → quote 保存 + メモ */}
+          <Highlights articleId={a().id} />
+
+          {/* Ask Claude（#22）: 記事本文を context にした対話 Q&A */}
+          <ArticleAsk articleId={a().id} />
         </article>
       )}
     </Show>

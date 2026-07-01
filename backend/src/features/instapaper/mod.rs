@@ -19,6 +19,11 @@ pub fn routes() -> Router<AppState> {
             "/api/read-later",
             post(handler::save_for_later).get(handler::list_read_later),
         )
+        // Static segment; matchit prefers it over /{article_id} (no conflict).
+        .route(
+            "/api/read-later/settings",
+            get(handler::get_settings).put(handler::update_settings),
+        )
         .route(
             "/api/read-later/{article_id}",
             get(handler::get_read_later_one),

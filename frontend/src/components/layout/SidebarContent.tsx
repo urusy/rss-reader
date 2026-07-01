@@ -1,5 +1,6 @@
 import { A } from "@solidjs/router";
 import FeedTree from "./FeedTree";
+import SavedViewList from "./SavedViewList";
 import { ThemeToggle } from "./ThemeToggle";
 import { FilterToggle } from "./FilterToggle";
 import { AddFeedDialog } from "./AddFeedDialog";
@@ -30,7 +31,8 @@ export default function SidebarContent(props: { onNavigate?: () => void }) {
         すべての記事
       </A>
 
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 space-y-3 overflow-y-auto">
+        <SavedViewList onNavigate={props.onNavigate} />
         <FeedTree onNavigate={props.onNavigate} />
       </div>
 
@@ -39,6 +41,9 @@ export default function SidebarContent(props: { onNavigate?: () => void }) {
         <div class="flex flex-col gap-0.5">
           <A href="/manage" class={navItem} activeClass={navActive} onClick={go}>
             フィード管理
+          </A>
+          <A href="/rules" class={navItem} activeClass={navActive} onClick={go}>
+            自動ルール
           </A>
           <A href="/settings" class={navItem} activeClass={navActive} onClick={go}>
             設定

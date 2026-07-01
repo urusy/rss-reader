@@ -1,6 +1,7 @@
 use super::domain::{
     classify_add_status, classify_auth_status, read_later_status, AddOutcome, AuthOutcome,
-    InstapaperCredentials, InstapaperStatus, ReadLaterItem, SaveUrl, StoredCredentials,
+    InstapaperCredentials, InstapaperStatus, ReadLaterItem, ReadLaterSettings, SaveUrl,
+    StoredCredentials,
 };
 use super::repository;
 use crate::features::articles::domain::ArticleId;
@@ -52,12 +53,44 @@ pub async fn save_for_later(state: &AppState, id: ArticleId) -> AppResult<ReadLa
     let url = SaveUrl::parse(article.url).map_err(AppError::Validation)?;
     repository::upsert_pending(&state.db, id).await?;
     match send_to_instapaper(state, &creds, &url, Some(article.title)).await {
-        Ok(()) => repository::mark_added(&state.db, id).await,
+        Ok(()) => {
+            let item = repository::mark_added(&state.db, id).await?;
+            // Read-on-Save (#16): 設定 ON のときだけ、保存と同時に既読化して
+            // 未読数の膨張を防ぐ。既読化は articles スライスの公開ユースケースを
+            // 再利用し is_read の書き込み所有を移さない。ベストエフォート —
+            // 既読化失敗で read-later の成功(added)は巻き戻さない。
+            if repository::mark_read_on_save_enabled(&state.db)
+                .await
+                .unwrap_or(false)
+            {
+                if let Err(e) = crate::features::articles::service::mark_read(state, id, true).await
+                {
+                    tracing::warn!(
+                        error = %e,
+                        article_id = %id.0,
+                        "read-on-save: failed to mark article read"
+                    );
+                }
+            }
+            Ok(item)
+        }
         Err(e) => {
             let _ = repository::mark_failed(&state.db, id, &e.to_string()).await;
             Err(AppError::Upstream(format!("instapaper add failed: {e}")))
         }
     }
+}
+
+pub async fn get_read_later_settings(state: &AppState) -> AppResult<ReadLaterSettings> {
+    repository::get_settings(&state.db).await
+}
+
+pub async fn update_read_later_settings(
+    state: &AppState,
+    mark_read_on_save: bool,
+) -> AppResult<ReadLaterSettings> {
+    repository::set_mark_read_on_save(&state.db, mark_read_on_save).await?;
+    repository::get_settings(&state.db).await
 }
 
 pub async fn get_read_later(state: &AppState, id: ArticleId) -> AppResult<Option<ReadLaterItem>> {
