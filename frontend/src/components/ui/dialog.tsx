@@ -8,21 +8,26 @@
 // NOTE: Ark UI's compound API can change across major versions. If an import or
 // part name breaks, check https://ark-ui.com (Solid / Dialog) for the current shape.
 //
+// Trigger/CloseTrigger は <button> を描画する。このバージョンの Ark UI は `as` prop 非対応
+// なので、Button 風の見た目は `buttonVariants({...})` を class で当てて作る（asChild の
+// render-prop も使えるが、単純なボタンならこちらが簡潔）。CloseTrigger は onClick を合成
+// できるので「閉じる＋副作用」を 1 要素で書ける。
+//
 // Usage:
 //   import {
 //     Dialog, DialogTrigger, DialogContent, DialogTitle,
 //     DialogDescription, DialogCloseTrigger,
 //   } from "@/components/ui/dialog";
-//   import { Button } from "@/components/ui/button";
+//   import { buttonVariants } from "@/components/ui/button";
 //
 //   <Dialog>
-//     <DialogTrigger as={Button}>削除</DialogTrigger>
+//     <DialogTrigger class={buttonVariants({ variant: "ghost" })}>削除</DialogTrigger>
 //     <DialogContent>
 //       <DialogTitle>フィードを削除しますか？</DialogTitle>
 //       <DialogDescription>この操作は取り消せません。</DialogDescription>
 //       <div class="mt-4 flex justify-end gap-2">
-//         <DialogCloseTrigger as={Button} variant="outline">キャンセル</DialogCloseTrigger>
-//         <Button variant="destructive" onClick={onConfirm}>削除する</Button>
+//         <DialogCloseTrigger class={buttonVariants({ variant: "outline" })}>キャンセル</DialogCloseTrigger>
+//         <DialogCloseTrigger class={buttonVariants({ variant: "destructive" })} onClick={onConfirm}>削除する</DialogCloseTrigger>
 //       </div>
 //     </DialogContent>
 //   </Dialog>
