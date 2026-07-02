@@ -15,7 +15,23 @@ import {
   readScrollMetrics,
   scrolledEnough,
 } from "@/lib/read-trigger";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleIndicator,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogCloseTrigger,
+} from "@/components/ui/dialog";
+import { Prose } from "@/components/ui/prose";
+import { renderMarkdown } from "@/lib/markdown";
 import ArticleAsk from "@/components/article/ArticleAsk";
 import { StarToggle, Highlights } from "@/components/article/Annotations";
 import ListenBar, { type ListenSource } from "@/components/article/ListenBar";
@@ -150,6 +166,44 @@ export default function ArticleDetail(props: { id: string | undefined }) {
     }
   };
 
+  // 要約/翻訳の削除は確認ダイアログを挟む（キャッシュ破棄は取り消せない）。
+  // 「削除する」は DialogCloseTrigger なので、閉じつつ onClick で clear を走らせる。
+  const DeleteConfirm = (p: {
+    kind: "summary" | "translation";
+    label: string;
+  }) => (
+    <Dialog>
+      {/* Ark UI の Trigger/CloseTrigger は <button> を描画するので buttonVariants を class で当てる
+          （このバージョンは as prop 非対応。asChild render-prop の代わりに直接装飾する）。 */}
+      <DialogTrigger
+        class={buttonVariants({ size: "sm", variant: "ghost" })}
+        disabled={clearing() !== null}
+      >
+        {clearing() === p.kind ? "削除中…" : "削除"}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogTitle>{p.label}を削除しますか？</DialogTitle>
+        <DialogDescription>
+          キャッシュされた{p.label}を削除します。この操作は取り消せません（もう一度作るには
+          Claude を呼び直します）。
+        </DialogDescription>
+        <div class="mt-4 flex justify-end gap-2">
+          <DialogCloseTrigger
+            class={buttonVariants({ size: "sm", variant: "outline" })}
+          >
+            キャンセル
+          </DialogCloseTrigger>
+          <DialogCloseTrigger
+            class={buttonVariants({ size: "sm", variant: "destructive" })}
+            onClick={() => clear(p.kind)}
+          >
+            削除する
+          </DialogCloseTrigger>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   // サーバ側で本文を抽出して full_content をキャッシュ。null のまま返れば抜粋にフォールバック。
   const extract = async () => {
     const id = props.id;
@@ -182,26 +236,47 @@ export default function ArticleDetail(props: { id: string | undefined }) {
     return a ? htmlToPlainText(bodyHtml(a)) : "";
   });
 
-  // 読み上げソース（本文/要約/翻訳）。要約・翻訳は backend で平文化済みの契約なので
-  // htmlToPlainText を通さない。本文（bodyHtml=sanitized HTML）だけ平文化する。
+  // 要約・翻訳（Markdown）の HTML 化は表示と読み上げ平文化の両方から参照されるので memo 化。
+  const summaryHtml = createMemo(() => renderMarkdown(article()?.summary));
+  const translationHtml = createMemo(() =>
+    renderMarkdown(article()?.translation),
+  );
+  const summaryPlain = createMemo(() =>
+    article()?.summary ? htmlToPlainText(summaryHtml()) : "",
+  );
+  const translationPlain = createMemo(() =>
+    article()?.translation ? htmlToPlainText(translationHtml()) : "",
+  );
+
+  // 読み上げソース（要約/翻訳/本文）。要約・翻訳は Markdown なので、記号（#, **, ```）を
+  // 読み上げないよう renderMarkdown→htmlToPlainText で平文化してから渡す（表示は Prose 側で
+  // HTML 化）。本文（bodyHtml=sanitized HTML）も平文化する。
+  // 並び順は記事内の表示順（要約 → 翻訳 → 本文）に合わせる。既定選択は本文（key=body）。
   const listenSources = (): ListenSource[] => {
     const a = article();
     if (!a) return [];
     return [
-      { key: "body", label: "本文", text: bodyPlain(), marksRead: true },
       ...(a.summary
-        ? [{ key: "summary", label: "要約", text: a.summary, marksRead: false }]
+        ? [
+            {
+              key: "summary",
+              label: "要約",
+              text: htmlToPlainText(renderMarkdown(a.summary)),
+              marksRead: false,
+            },
+          ]
         : []),
       ...(a.translation
         ? [
             {
               key: "translation",
               label: "翻訳",
-              text: a.translation,
+              text: htmlToPlainText(renderMarkdown(a.translation)),
               marksRead: false,
             },
           ]
         : []),
+      { key: "body", label: "本文", text: bodyPlain(), marksRead: true },
     ];
   };
 
@@ -297,47 +372,8 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             <p class="text-xs text-muted-foreground">保存に失敗: {later()?.last_error}</p>
           </Show>
 
-          <Show when={a().summary}>
-            <section class="rounded-lg border border-border bg-muted/40 p-4">
-              <div class="mb-1 flex items-center justify-between gap-2">
-                <h2 class="text-sm font-semibold">要約</h2>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => clear("summary")}
-                  disabled={clearing() !== null}
-                >
-                  {clearing() === "summary" ? "削除中…" : "削除"}
-                </Button>
-              </div>
-              {/* 要約・翻訳は plain text 契約（backend で HTML 除去済み）なので text node で安全に表示。
-                  prose は本文/翻訳と基本タイポを揃えるため。Markdown は描画されない。 */}
-              <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                {a().summary}
-              </div>
-            </section>
-          </Show>
-
-          <Show when={a().translation}>
-            <section class="rounded-lg border border-border bg-muted/40 p-4">
-              <div class="mb-1 flex items-center justify-between gap-2">
-                <h2 class="text-sm font-semibold">翻訳</h2>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => clear("translation")}
-                  disabled={clearing() !== null}
-                >
-                  {clearing() === "translation" ? "削除中…" : "削除"}
-                </Button>
-              </div>
-              <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                {a().translation}
-              </div>
-            </section>
-          </Show>
-
           {/* リッスンモード（#33 v1）: 本文/要約/翻訳をソース切替で読み上げ。
+              読み上げコントロールは要約・翻訳より上に置く（操作導線を先頭に集約）。
               本文のみ進捗 80% で既読化（markReadNow）に繋ぐ。バックエンド非依存。 */}
           <ListenBar
             articleId={a().id}
@@ -345,13 +381,46 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             onListened={() => markReadNow(a().id)}
           />
 
-          {/* 本文は信頼できない HTML。innerHTML 前に必ず浄化する
-              （埋め込み <style> によるレイアウト破壊・XSS 対策）。
-              full_content があれば優先表示（抜粋トグル時は content）。 */}
-          <div
-            class="prose prose-sm dark:prose-invert max-w-none"
-            innerHTML={bodyHtml(a())}
-          />
+          <Show when={a().summary}>
+            <Collapsible defaultOpen>
+              <section class="rounded-lg border border-border bg-muted/40 p-4">
+                <div class="mb-1 flex items-center justify-between gap-2">
+                  <CollapsibleTrigger class="-ml-2 flex-1">
+                    <CollapsibleIndicator>▾</CollapsibleIndicator>
+                    <span class="text-sm font-semibold">要約</span>
+                  </CollapsibleTrigger>
+                  <DeleteConfirm kind="summary" label="要約" />
+                </div>
+                {/* 要約は Markdown。renderMarkdown で HTML 化し Prose で描画（コードはハイライト）。 */}
+                <CollapsibleContent>
+                  <Prose html={renderMarkdown(a().summary)} />
+                </CollapsibleContent>
+              </section>
+            </Collapsible>
+          </Show>
+
+          <Show when={a().translation}>
+            <Collapsible defaultOpen>
+              <section class="rounded-lg border border-border bg-muted/40 p-4">
+                <div class="mb-1 flex items-center justify-between gap-2">
+                  <CollapsibleTrigger class="-ml-2 flex-1">
+                    <CollapsibleIndicator>▾</CollapsibleIndicator>
+                    <span class="text-sm font-semibold">翻訳</span>
+                  </CollapsibleTrigger>
+                  <DeleteConfirm kind="translation" label="翻訳" />
+                </div>
+                {/* 翻訳も Markdown。renderMarkdown→Prose で HTML 化＋コードハイライト。 */}
+                <CollapsibleContent>
+                  <Prose html={renderMarkdown(a().translation)} />
+                </CollapsibleContent>
+              </section>
+            </Collapsible>
+          </Show>
+
+          {/* 本文は信頼できない HTML。bodyHtml で必ず浄化してから Prose に渡す
+              （埋め込み <style> によるレイアウト破壊・XSS 対策）。Prose がコードブロックを
+              highlight.js で色付けする。full_content があれば優先表示（抜粋トグル時は content）。 */}
+          <Prose html={bodyHtml(a())} />
 
           {/* タグ編集 + AI 提案（#24） */}
           <TagEditor articleId={a().id} />
