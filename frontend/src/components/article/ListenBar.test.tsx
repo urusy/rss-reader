@@ -171,6 +171,45 @@ describe("ListenBar", () => {
     expect(loadTtsPos("a1", "body", spokenOf(body))).not.toBeNull();
   });
 
+  it("offers a restart button when a saved position exists and plays from the top", async () => {
+    const t = spokenOf(body);
+    // 保存 chunk(1) があるので idle でも「最初から」を出す。
+    saveTtsPos("a1", "body", {
+      chunk: 1,
+      len: t.length,
+      hash: hashText(t),
+      ratio: 0.5,
+      t: 1,
+    });
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    // 通常の再開（▶ 読み上げ）は保存 chunk から。最初からは先頭 chunk(0) から。
+    fireEvent.click(screen.getByText("⏮ 最初から"));
+    expect(synth.spoken[0].text).toBe(chunksOf(body)[0]);
+  });
+
+  it("shows both resume and restart while paused", async () => {
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByText("▶ 読み上げ"));
+    await waitFor(() => screen.getByText("⏸ 一時停止"));
+    fireEvent.click(screen.getByText("⏸ 一時停止"));
+    // paused: 再開ボタンに加えて最初から再生ボタンも出る。
+    expect(screen.getByText("▶ 再開")).toBeTruthy();
+    fireEvent.click(screen.getByText("⏮ 最初から"));
+    // 最新の発話は先頭 chunk（作り直して 0 から読み直す）。
+    expect(synth.spoken[synth.spoken.length - 1].text).toBe(chunksOf(body)[0]);
+  });
+
+  it("does not show restart during fresh idle (no saved position)", () => {
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    expect(screen.queryByText("⏮ 最初から")).toBeNull();
+  });
+
   it("ignores a stale saved position when the text changed (len mismatch)", async () => {
     // 別テキスト由来の len/hash を仕込む → 照合不一致で先頭から。
     saveTtsPos("a1", "body", {
