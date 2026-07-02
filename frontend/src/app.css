@@ -160,80 +160,132 @@ body {
   content: "" !important;
 }
 
-/* --- highlight.js テーマ（GitHub 系の配色を CSS 変数で light/dark 切替） --- */
-:root {
-  --hljs-comment: #6a737d;
-  --hljs-keyword: #d73a49;
-  --hljs-string: #032f62;
-  --hljs-number: #005cc5;
-  --hljs-title: #6f42c1;
-  --hljs-built: #e36209;
-  --hljs-attr: #005cc5;
+/* インライン style だけでコードを表すフィード（Blogger 等）の救済。sanitize が安全な
+   タイポ系 CSS（font-family/color/white-space）を残し、等幅要素に feed-mono を付ける。
+   Blogger は 1 行 = 1 <p> で並べるため、段落余白で間延びする。code 行の <p> 余白を詰め、
+   空白（インデント）を維持して等幅で読めるようにする。色は元 style の指定を尊重する。 */
+.prose :where(.feed-mono) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
 }
-/* dark 系テーマ（dark / graphite）はクラスが要素自身に付くので直接指定する。sepia は
-   light 系なので :root の値を継承する。 */
+.prose :where(p:has(.feed-mono)) {
+  margin-top: 0;
+  margin-bottom: 0;
+  white-space: pre-wrap;
+}
+
+/* --- highlight.js テーマ ---
+   GitHub / GitHub Dark 公式テーマ（highlight.js/styles）を CSS 変数で忠実移植し、
+   light 系(:root, .sepia は継承) と dark 系(.dark, .graphite) で配色を切替える。
+   手書きだと token class を取りこぼす（name/literal/section の誤色・function 無色）ため、
+   公式のクラス分類をそのまま踏襲する。背景はアプリの --muted を使うので .hljs の bg は透過。
+   注: highlight.js の一部文法（Go 等）は旧 scope 名 `function`/`params` を出す。github
+   テーマは新命名(title.function_)前提で関数名が無色に落ちるので、`.hljs-function` を
+   title(紫)グループへ別名追加して補う。`params`/`punctuation` は github 同様に基本色。 */
+:root {
+  --hljs-red: #d73a49; /* keyword 系 */
+  --hljs-purple: #6f42c1; /* title/function 系 */
+  --hljs-blue: #005cc5; /* attr/number/literal/operator 系 */
+  --hljs-navy: #032f62; /* string 系 */
+  --hljs-orange: #e36209; /* built_in/symbol */
+  --hljs-gray: #6a737d; /* comment */
+  --hljs-green: #22863a; /* name/quote/selector-tag */
+  --hljs-section: #005cc5;
+  --hljs-bullet: #735c0f;
+  --hljs-add-fg: #22863a;
+  --hljs-add-bg: #f0fff4;
+  --hljs-del-fg: #b31d28;
+  --hljs-del-bg: #ffeef0;
+}
 .dark,
 .graphite {
-  --hljs-comment: #8b949e;
-  --hljs-keyword: #ff7b72;
-  --hljs-string: #a5d6ff;
-  --hljs-number: #79c0ff;
-  --hljs-title: #d2a8ff;
-  --hljs-built: #ffa657;
-  --hljs-attr: #79c0ff;
+  --hljs-red: #ff7b72;
+  --hljs-purple: #d2a8ff;
+  --hljs-blue: #79c0ff;
+  --hljs-navy: #a5d6ff;
+  --hljs-orange: #ffa657;
+  --hljs-gray: #8b949e;
+  --hljs-green: #7ee787;
+  --hljs-section: #1f6feb;
+  --hljs-bullet: #f2cc60;
+  --hljs-add-fg: #aff5b4;
+  --hljs-add-bg: #033a16;
+  --hljs-del-fg: #ffdcd7;
+  --hljs-del-bg: #67060c;
 }
 .hljs {
   background: transparent;
   color: var(--foreground);
 }
-.hljs-comment,
-.hljs-quote {
-  color: var(--hljs-comment);
-  font-style: italic;
-}
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-literal,
-.hljs-section,
 .hljs-doctag,
+.hljs-keyword,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable,
 .hljs-type,
-.hljs-name {
-  color: var(--hljs-keyword);
-}
-.hljs-string,
-.hljs-regexp,
-.hljs-addition,
-.hljs-meta .hljs-string {
-  color: var(--hljs-string);
-}
-.hljs-number,
-.hljs-symbol,
-.hljs-bullet,
-.hljs-link,
-.hljs-selector-attr,
-.hljs-selector-pseudo {
-  color: var(--hljs-number);
+.hljs-variable.language_ {
+  color: var(--hljs-red);
 }
 .hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
 .hljs-title.function_,
-.hljs-variable,
-.hljs-template-variable,
-.hljs-class .hljs-title {
-  color: var(--hljs-title);
-}
-.hljs-built_in,
-.hljs-builtin-name {
-  color: var(--hljs-built);
+.hljs-function {
+  color: var(--hljs-purple);
 }
 .hljs-attr,
 .hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-variable,
+.hljs-selector-attr,
 .hljs-selector-class,
-.hljs-meta {
-  color: var(--hljs-attr);
+.hljs-selector-id {
+  color: var(--hljs-blue);
+}
+.hljs-regexp,
+.hljs-string,
+.hljs-meta .hljs-string {
+  color: var(--hljs-navy);
+}
+.hljs-built_in,
+.hljs-symbol {
+  color: var(--hljs-orange);
+}
+.hljs-comment,
+.hljs-code,
+.hljs-formula {
+  color: var(--hljs-gray);
+}
+.hljs-name,
+.hljs-quote,
+.hljs-selector-tag,
+.hljs-selector-pseudo {
+  color: var(--hljs-green);
+}
+.hljs-subst {
+  color: var(--foreground);
+}
+.hljs-section {
+  color: var(--hljs-section);
+  font-weight: bold;
+}
+.hljs-bullet {
+  color: var(--hljs-bullet);
 }
 .hljs-emphasis {
   font-style: italic;
 }
 .hljs-strong {
-  font-weight: 600;
+  font-weight: bold;
+}
+.hljs-addition {
+  color: var(--hljs-add-fg);
+  background-color: var(--hljs-add-bg);
+}
+.hljs-deletion {
+  color: var(--hljs-del-fg);
+  background-color: var(--hljs-del-bg);
 }
