@@ -28,6 +28,7 @@ class MockSynth {
   paused = false;
   spoken: MockUtterance[] = [];
   current: MockUtterance | null = null;
+  cancelCount = 0;
   // autoEnd=true のとき、speak した発話を microtask で自動完了させ、
   // キューを最後まで流して進捗 1.0（＝完了）まで到達させる。
   autoEnd = false;
@@ -37,6 +38,7 @@ class MockSynth {
     if (this.autoEnd) queueMicrotask(() => u.onend?.());
   }
   cancel() {
+    this.cancelCount++;
     this.current = null;
   }
   pause() {
@@ -201,6 +203,59 @@ describe("ListenBar", () => {
     fireEvent.click(screen.getByText("⏮ 最初から"));
     // 最新の発話は先頭 chunk（作り直して 0 から読み直す）。
     expect(synth.spoken[synth.spoken.length - 1].text).toBe(chunksOf(body)[0]);
+  });
+
+  it("cancels the current utterance immediately on pause (no wait for sentence end)", async () => {
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByText("▶ 読み上げ"));
+    await waitFor(() => screen.getByText("⏸ 一時停止"));
+    const before = synth.cancelCount;
+    fireEvent.click(screen.getByText("⏸ 一時停止"));
+    // 一時停止は現在の発話を即 cancel する（文末まで待たない）。
+    expect(synth.cancelCount).toBeGreaterThan(before);
+    expect(screen.getByText("▶ 再開")).toBeTruthy();
+  });
+
+  it("resumes the current chunk from its start after pause", async () => {
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByText("▶ 読み上げ"));
+    await waitFor(() => screen.getByText("⏸ 一時停止"));
+    fireEvent.click(screen.getByText("⏸ 一時停止")); // paused（cancel 済み）
+    const spokenBefore = synth.spoken.length;
+    fireEvent.click(screen.getByText("▶ 再開"));
+    await waitFor(() => screen.getByText("⏸ 一時停止"));
+    // 再開で現在チャンク（先頭 = chunk 0）が改めて speak される。
+    expect(synth.spoken.length).toBeGreaterThan(spokenBefore);
+    expect(synth.spoken[synth.spoken.length - 1].text).toBe(chunksOf(body)[0]);
+  });
+
+  it("resumes from the current chunk (not the top) when paused mid-article", async () => {
+    const t = spokenOf(body);
+    // 保存 chunk(1) から再生開始 → 途中で一時停止 → 再開してもその文の先頭から。
+    saveTtsPos("a1", "body", {
+      chunk: 1,
+      len: t.length,
+      hash: hashText(t),
+      ratio: 0.5,
+      t: 1,
+    });
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByText("▶ 読み上げ"));
+    await waitFor(() => screen.getByText("⏸ 一時停止"));
+    expect(synth.spoken[synth.spoken.length - 1].text).toBe(chunksOf(body)[1]);
+    fireEvent.click(screen.getByText("⏸ 一時停止"));
+    const spokenBefore = synth.spoken.length;
+    fireEvent.click(screen.getByText("▶ 再開"));
+    await waitFor(() => screen.getByText("⏸ 一時停止"));
+    // 再開で実際に再発話し、かつ chunk 0 に巻き戻らず chunk 1 の先頭から読み直す。
+    expect(synth.spoken.length).toBeGreaterThan(spokenBefore);
+    expect(synth.spoken[synth.spoken.length - 1].text).toBe(chunksOf(body)[1]);
   });
 
   it("does not show restart during fresh idle (no saved position)", () => {

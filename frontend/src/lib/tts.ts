@@ -199,28 +199,34 @@ export function createTtsController(
     synth.speak(u);
   };
 
+  // 指定チャンクの先頭から再生を開始する共通処理（play / resume 共用）。
+  // pause 中に paused 固着したエンジン（Chrome 既知）を先に解除し、前の発話を
+  // クリアしてから読み直す。
+  const start = (fromChunk: number) => {
+    if (synth.paused) synth.resume();
+    synth.cancel(); // 前の発話をクリア
+    setState("playing");
+    // fromChunk >= length は terminal 分岐で即 onProgress(1)+onEnd（clamp しない）。
+    speakFrom(fromChunk);
+  };
+
   return {
     state: () => state,
-    play: (fromChunk = 0) => {
-      // pause 中に別ソースへ切替えて再生した場合、cancel→speak だけだと
-      // エンジンが paused のまま無音固着する（Chrome 既知）。先に解除する。
-      if (synth.paused) synth.resume();
-      synth.cancel(); // 前の発話をクリア
-      setState("playing");
-      // fromChunk >= length は terminal 分岐で即 onProgress(1)+onEnd（clamp しない）。
-      speakFrom(fromChunk);
-    },
+    play: (fromChunk = 0) => start(fromChunk),
+    // 一時停止: speechSynthesis.pause() は現在の1文(utterance)を境界まで読み切ってから
+    // しか止まらない（macOS/iOS のローカル音声等）ため、押した瞬間に cancel して即無音に
+    // する。state を先に paused へ落とし、cancel が誘発しうる onend が次チャンクへ進むのを
+    // 防ぐ（onend は state==="playing" ガード）。再開は resume が現在文(idx)の先頭から。
     pause: () => {
       if (state === "playing") {
-        synth.pause();
         setState("paused");
+        clearTimer();
+        synth.cancel();
       }
     },
+    // 再開: Web Speech は文の途中から再開できないので、現在の文チャンクの先頭から読み直す。
     resume: () => {
-      if (state === "paused") {
-        synth.resume();
-        setState("playing");
-      }
+      if (state === "paused") start(idx);
     },
     stop: () => {
       clearTimer();
