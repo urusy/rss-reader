@@ -261,7 +261,7 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             {
               key: "summary",
               label: "要約",
-              text: htmlToPlainText(renderMarkdown(a.summary)),
+              text: summaryPlain(),
               marksRead: false,
             },
           ]
@@ -271,7 +271,7 @@ export default function ArticleDetail(props: { id: string | undefined }) {
             {
               key: "translation",
               label: "翻訳",
-              text: htmlToPlainText(renderMarkdown(a.translation)),
+              text: translationPlain(),
               marksRead: false,
             },
           ]
@@ -393,7 +393,7 @@ export default function ArticleDetail(props: { id: string | undefined }) {
                 </div>
                 {/* 要約は Markdown。renderMarkdown で HTML 化し Prose で描画（コードはハイライト）。 */}
                 <CollapsibleContent>
-                  <Prose html={renderMarkdown(a().summary)} />
+                  <Prose html={summaryHtml()} />
                 </CollapsibleContent>
               </section>
             </Collapsible>
@@ -411,7 +411,7 @@ export default function ArticleDetail(props: { id: string | undefined }) {
                 </div>
                 {/* 翻訳も Markdown。renderMarkdown→Prose で HTML 化＋コードハイライト。 */}
                 <CollapsibleContent>
-                  <Prose html={renderMarkdown(a().translation)} />
+                  <Prose html={translationHtml()} />
                 </CollapsibleContent>
               </section>
             </Collapsible>
