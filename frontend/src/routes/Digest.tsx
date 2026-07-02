@@ -1,8 +1,8 @@
 import { createResource, createSignal, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
-import { marked } from "marked";
 import { api, errorStatus } from "@/lib/api";
-import { sanitizeArticleHtml } from "@/lib/sanitize";
+import { renderMarkdown } from "@/lib/markdown";
+import { Prose } from "@/components/ui/prose";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +18,7 @@ export default function Digest() {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
-  const html = () =>
-    sanitizeArticleHtml(
-      (marked.parse(digest()?.markdown ?? "", { async: false }) as string) ?? "",
-    );
+  const html = () => renderMarkdown(digest()?.markdown);
 
   const regenerate = async () => {
     setBusy(true);
@@ -81,10 +78,7 @@ export default function Digest() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div
-                class="prose prose-sm dark:prose-invert max-w-none"
-                innerHTML={html()}
-              />
+              <Prose html={html()} />
             </CardContent>
           </Card>
         )}

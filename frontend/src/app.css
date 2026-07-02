@@ -139,6 +139,101 @@ body {
 .prose :where(img, video) {
   height: auto;
 }
+/* コードブロック: prose(Typography) 既定の暗色固定 pre を、アプリの muted トークンに
+   置き換えてテーマに追従させる。内側の <code> は色を hljs トークンに委ねる。 */
 .prose :where(pre) {
   overflow-x: auto;
+  background-color: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.prose :where(pre code) {
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+  padding: 0;
+}
+/* インライン code の前後に付く Typography のバッククォート装飾を消す（余計な ` を出さない）。 */
+.prose :where(code)::before,
+.prose :where(code)::after {
+  content: "" !important;
+}
+
+/* --- highlight.js テーマ（GitHub 系の配色を CSS 変数で light/dark 切替） --- */
+:root {
+  --hljs-comment: #6a737d;
+  --hljs-keyword: #d73a49;
+  --hljs-string: #032f62;
+  --hljs-number: #005cc5;
+  --hljs-title: #6f42c1;
+  --hljs-built: #e36209;
+  --hljs-attr: #005cc5;
+}
+/* dark 系テーマ（dark / graphite）はクラスが要素自身に付くので直接指定する。sepia は
+   light 系なので :root の値を継承する。 */
+.dark,
+.graphite {
+  --hljs-comment: #8b949e;
+  --hljs-keyword: #ff7b72;
+  --hljs-string: #a5d6ff;
+  --hljs-number: #79c0ff;
+  --hljs-title: #d2a8ff;
+  --hljs-built: #ffa657;
+  --hljs-attr: #79c0ff;
+}
+.hljs {
+  background: transparent;
+  color: var(--foreground);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-type,
+.hljs-name {
+  color: var(--hljs-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta .hljs-string {
+  color: var(--hljs-string);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--hljs-number);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-class .hljs-title {
+  color: var(--hljs-title);
+}
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--hljs-built);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-selector-class,
+.hljs-meta {
+  color: var(--hljs-attr);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
 }
