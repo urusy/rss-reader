@@ -55,4 +55,40 @@ describe("sanitizeArticleHtml", () => {
     expect(clean).toContain("x := 1");
     expect(clean).toContain('href="https://example.com"');
   });
+
+  // --- inline style だけでコードを表すフィード（Blogger 等）の救済 ---
+
+  it("安全なタイポ系 inline style（font-family/color/white-space）は残す", () => {
+    const clean = sanitizeArticleHtml(
+      '<span style="font-family: \'Roboto Mono\', monospace; color: #188038; white-space: pre-wrap;">code</span>',
+    );
+    expect(clean).toMatch(/font-family/i);
+    expect(clean).toMatch(/white-space/i);
+    expect(clean.toLowerCase()).toContain("#188038");
+  });
+
+  it("レイアウト破壊系 style（margin/position/width/display）は落とし、色だけ残す", () => {
+    const clean = sanitizeArticleHtml(
+      '<div style="margin: -100px; position: absolute; width: 9999px; display: none; color: red;">x</div>',
+    );
+    expect(clean).not.toMatch(/margin/i);
+    expect(clean).not.toMatch(/position/i);
+    expect(clean).not.toMatch(/width/i);
+    expect(clean).not.toMatch(/display/i);
+    expect(clean).toMatch(/color:\s*red/i);
+  });
+
+  it("等幅フォント指定の要素に feed-mono クラスを付ける", () => {
+    const clean = sanitizeArticleHtml(
+      '<span style="font-family: \'Roboto Mono\', monospace;">class Foo {}</span>',
+    );
+    expect(clean).toContain("feed-mono");
+  });
+
+  it("等幅でない要素には feed-mono を付けない", () => {
+    const clean = sanitizeArticleHtml(
+      '<span style="font-family: Georgia, serif; color: blue;">prose</span>',
+    );
+    expect(clean).not.toContain("feed-mono");
+  });
 });

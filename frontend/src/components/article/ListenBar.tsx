@@ -230,6 +230,19 @@ export default function ListenBar(props: {
         </Button>
       </Show>
 
+      {/* 「最初から再生」: 再開ポイントがある時（一時停止中／保存位置のある idle）だけ、
+          再開ボタンに加えて先頭からの再生を提供する。play(0) で保存 chunk を無視する。 */}
+      <Show
+        when={
+          state() === "paused" ||
+          (state() === "idle" && progress() > 0 && progress() < 1)
+        }
+      >
+        <Button size="sm" variant="ghost" onClick={() => play(0)}>
+          ⏮ 最初から
+        </Button>
+      </Show>
+
       <Show when={state() !== "idle"}>
         <Button size="sm" variant="ghost" onClick={() => controller?.stop()}>
           ⏹ 停止
