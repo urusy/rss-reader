@@ -24,6 +24,13 @@ pub struct AppConfig {
     pub feed_refresh_interval_secs: u64,
     /// Opt-in: extract full article bodies during crawl (best-effort). Default false.
     pub extract_on_crawl: bool,
+    /// Opt-in: let feed/extraction fetches reach private/loopback addresses
+    /// (LAN-internal feeds). Default false = SSRF guard fully on.
+    pub allow_private_networks: bool,
+    /// Cross-origin origins allowed on /api (comma-separated env). Empty =
+    /// no CORS (same-origin only) — nginx / Vite proxy make the app
+    /// same-origin, so cross-origin access is opt-in.
+    pub cors_allowed_origins: Vec<String>,
     /// Max bytes of a fetched page we will attempt to extract (guards memory).
     pub extract_max_bytes: usize,
     /// Minimum plain-text chars for an extraction to count as "real body".
@@ -90,6 +97,21 @@ impl AppConfig {
             .ok()
             .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(false);
+
+        let allow_private_networks = std::env::var("ALLOW_PRIVATE_NETWORKS")
+            .ok()
+            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
+        let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
+            .ok()
+            .map(|v| {
+                v.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let extract_max_bytes = std::env::var("EXTRACT_MAX_BYTES")
             .ok()
@@ -178,6 +200,8 @@ impl AppConfig {
             anthropic_model,
             feed_refresh_interval_secs,
             extract_on_crawl,
+            allow_private_networks,
+            cors_allowed_origins,
             extract_max_bytes,
             extract_min_chars,
             digest_enabled,
@@ -217,6 +241,8 @@ impl AppConfig {
             anthropic_model: "claude-sonnet-4-6".to_string(),
             feed_refresh_interval_secs: 900,
             extract_on_crawl: false,
+            allow_private_networks: false,
+            cors_allowed_origins: Vec::new(),
             extract_max_bytes: 3_000_000,
             extract_min_chars: 200,
             digest_enabled: false,

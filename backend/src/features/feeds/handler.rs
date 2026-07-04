@@ -66,7 +66,8 @@ pub async fn update(
     Json(body): Json<UpdateFeed>,
 ) -> AppResult<Json<Feed>> {
     let folder_id = body.folder_id.map(|inner| inner.map(FolderId));
-    let feed = service::update_feed(&state, FeedId(id), body.title, folder_id, body.priority).await?;
+    let feed =
+        service::update_feed(&state, FeedId(id), body.title, folder_id, body.priority).await?;
     Ok(Json(feed))
 }
 

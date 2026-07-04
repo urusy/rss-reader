@@ -7,6 +7,7 @@ use super::domain::{
 };
 use super::repository;
 use crate::shared::error::{AppError, AppResult};
+use crate::shared::fetch::{read_body_truncated, safe_get, UrlGuard};
 use crate::shared::state::AppState;
 
 const MAX_BODY_BYTES: usize = 5 * 1024 * 1024;
@@ -16,15 +17,13 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 pub async fn discover(state: &AppState, raw_url: &str) -> AppResult<Vec<DiscoveredFeed>> {
     let input = DiscoverUrl::parse(raw_url).map_err(AppError::Validation)?;
 
-    let resp = state
-        .http
-        .get(input.as_str())
-        .timeout(FETCH_TIMEOUT)
-        .send()
-        .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?
-        .error_for_status()
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
+    // SSRF-guarded: redirects are followed hop-by-hop inside safe_get, each
+    // re-validated against the guard. resp.url() is still the final URL.
+    let guard = UrlGuard::from_config(&state.config);
+    let resp = safe_get(&state.http_external, &guard, input.as_str(), |rb| {
+        rb.timeout(FETCH_TIMEOUT)
+    })
+    .await?;
 
     let base = resp.url().clone(); // final URL after redirects
     let content_type = resp
@@ -34,15 +33,7 @@ pub async fn discover(state: &AppState, raw_url: &str) -> AppResult<Vec<Discover
         .unwrap_or("")
         .to_string();
 
-    let body = resp
-        .bytes()
-        .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
-    let body = if body.len() > MAX_BODY_BYTES {
-        body.slice(0..MAX_BODY_BYTES)
-    } else {
-        body
-    };
+    let body = read_body_truncated(resp, MAX_BODY_BYTES).await?;
 
     let mut candidates = if is_feed_content_type(&content_type) {
         let title = parser::parse(&body[..])

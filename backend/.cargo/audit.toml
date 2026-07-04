@@ -1,0 +1,14 @@
+# cargo-audit の設定（監査 #8）。ignore には必ず理由を書くこと。
+[advisories]
+ignore = [
+    # rsa Marvin Attack (timing sidechannel)。修正版なし。
+    # web-push-native → jwt-simple → superboring → rsa の推移依存だが、
+    # VAPID 署名は ES256 (p256) で RSA コードパスは実行されない。
+    "RUSTSEC-2023-0071",
+    # quick-xml 0.37 の DoS 2件（namespace 割当 / 属性重複チェックの2乗時間）。
+    # feed-rs 2.3.1（最新）が quick-xml 0.37 を要求しており上流待ち。
+    # 入力は shared/fetch.rs の 10MB ボディ上限で制限済み（緩和策）。
+    # feed-rs が quick-xml >=0.41 に上がったら外すこと。
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]

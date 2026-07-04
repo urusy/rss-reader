@@ -7,7 +7,12 @@ use super::repository;
 use crate::features::articles;
 use crate::features::folders::domain::FolderId;
 use crate::shared::error::{AppError, AppResult};
+use crate::shared::fetch::{read_body_limited, safe_get, UrlGuard};
 use crate::shared::state::AppState;
+
+/// Hard cap on a fetched feed document. Full-content feeds run a few MB;
+/// anything past this is hostile or broken (guards the crawl task from OOM).
+const FEED_MAX_BYTES: usize = 10 * 1024 * 1024;
 
 pub async fn create_feed(state: &AppState, raw_url: &str) -> AppResult<Feed> {
     let url = FeedUrl::parse(raw_url).map_err(AppError::Validation)?;
@@ -106,17 +111,9 @@ pub async fn fetch_and_store(state: &AppState, feed: &Feed) -> AppResult<()> {
 
 /// Fetch one feed over HTTP, parse it, and upsert its entries as articles.
 async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
-    let bytes = state
-        .http
-        .get(&feed.url)
-        .send()
-        .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?
-        .error_for_status()
-        .map_err(|e| AppError::Upstream(e.to_string()))?
-        .bytes()
-        .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
+    let guard = UrlGuard::from_config(&state.config);
+    let resp = safe_get(&state.http_external, &guard, &feed.url, |rb| rb).await?;
+    let bytes = read_body_limited(resp, FEED_MAX_BYTES).await?;
 
     let parsed =
         parser::parse(&bytes[..]).map_err(|e| AppError::Upstream(format!("parse error: {e}")))?;

@@ -13,5 +13,9 @@ pub async fn fetch(pool: &PgPool) -> AppResult<Stats> {
     )
     .fetch_one(pool)
     .await?;
-    Ok(Stats { feeds, articles, unread })
+    Ok(Stats {
+        feeds,
+        articles,
+        unread,
+    })
 }

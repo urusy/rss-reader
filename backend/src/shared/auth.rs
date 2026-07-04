@@ -103,6 +103,7 @@ mod tests {
             db,
             config: Arc::new(AppConfig::for_test(token.map(|s| s.to_string()))),
             http: reqwest::Client::new(),
+            http_external: reqwest::Client::new(),
         }
     }
 

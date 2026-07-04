@@ -74,6 +74,8 @@ pub struct ArticleNotice {
     pub title: String,
     pub url: String,
     pub feed_title: Option<String>,
+    /// ウォーターマーク進行の基準（上限超過時は「通知した最後の記事」まで進める）。
+    pub created_at: DateTime<Utc>,
 }
 
 pub async fn new_priority_articles(
@@ -83,7 +85,7 @@ pub async fn new_priority_articles(
     limit: i64,
 ) -> AppResult<Vec<ArticleNotice>> {
     let rows = sqlx::query_as::<_, ArticleNotice>(
-        r#"SELECT a.title AS title, a.url AS url, f.title AS feed_title
+        r#"SELECT a.title AS title, a.url AS url, f.title AS feed_title, a.created_at AS created_at
            FROM articles a
            JOIN feeds f ON f.id = a.feed_id
            WHERE f.priority >= 1

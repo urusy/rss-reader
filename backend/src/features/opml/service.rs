@@ -60,8 +60,14 @@ pub async fn import_opml(state: &AppState, xml: &str) -> AppResult<ImportSummary
             imported_feeds += 1;
 
             if let Some(fid) = folder_id {
-                feeds::repository::update(&state.db, FeedId(feed.id.0), None, Some(Some(fid)), None)
-                    .await?;
+                feeds::repository::update(
+                    &state.db,
+                    FeedId(feed.id.0),
+                    None,
+                    Some(Some(fid)),
+                    None,
+                )
+                .await?;
             }
         }
     }

@@ -153,11 +153,12 @@ pub async fn clear_summary(pool: &PgPool, id: ArticleId) -> AppResult<()> {
 
 /// Clear a cached translation (mirrors `clear_summary`).
 pub async fn clear_translation(pool: &PgPool, id: ArticleId) -> AppResult<()> {
-    let res =
-        sqlx::query("UPDATE articles SET translation = NULL, translation_lang = NULL WHERE id = $1")
-            .bind(id.0)
-            .execute(pool)
-            .await?;
+    let res = sqlx::query(
+        "UPDATE articles SET translation = NULL, translation_lang = NULL WHERE id = $1",
+    )
+    .bind(id.0)
+    .execute(pool)
+    .await?;
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }

@@ -36,7 +36,13 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::Validation(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             AppError::NotEnabled(_) => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
-            AppError::Upstream(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
+            AppError::Upstream(e) => {
+                // Mask upstream details: connection-refused vs timeout vs DNS
+                // errors would otherwise let a client port-scan the internal
+                // network through us. Full detail goes to the log only.
+                tracing::warn!(error = %e, "upstream error");
+                (StatusCode::BAD_GATEWAY, "upstream request failed".into())
+            }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())

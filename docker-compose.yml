@@ -4,7 +4,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rss}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rss}
+      # 既定値なし: .env に無ければ compose が起動前に失敗する（fail-fast、監査 #9）。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-rssreader}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -20,8 +21,12 @@ services:
     image: ${REGISTRY:-localhost}/rss-reader-backend:${TAG:-latest}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-rss}:${POSTGRES_PASSWORD:-rss}@db:5432/${POSTGRES_DB:-rssreader}
+      DATABASE_URL: postgres://${POSTGRES_USER:-rss}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@db:5432/${POSTGRES_DB:-rssreader}
       BIND_ADDR: 0.0.0.0:8080
+      # SSRF ガード: LAN 内アドレスのフィードを購読したいときだけ true にする。
+      ALLOW_PRIVATE_NETWORKS: ${ALLOW_PRIVATE_NETWORKS:-}
+      # CORS: 既定は同一オリジンのみ。別オリジンから /api を叩くときだけ設定。
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       FEED_REFRESH_INTERVAL_SECS: ${FEED_REFRESH_INTERVAL_SECS:-900}

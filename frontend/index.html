@@ -8,25 +8,9 @@
     />
     <title>RSS Reader</title>
     <!-- ゼロ FOUC: バンドル読込前に dark クラス + color-scheme を当てる。
-         ランタイムの真実は lib/theme.ts。ここは最初の1フレームの当てのみ。 -->
-    <script>
-      (function () {
-        try {
-          var valid = ["light", "dark", "graphite", "sepia"];
-          var t = localStorage.getItem("theme");
-          if (valid.indexOf(t) === -1) {
-            t =
-              window.matchMedia &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches
-                ? "dark"
-                : "light";
-          }
-          var el = document.documentElement;
-          if (t !== "light") el.classList.add(t);
-          el.style.colorScheme = t === "dark" || t === "graphite" ? "dark" : "light";
-        } catch (e) {}
-      })();
-    </script>
+         中身は public/theme-init.js（CSP script-src 'self' のため外部ファイル）。
+         head 内の同期スクリプトなので描画前に必ず実行される。 -->
+    <script src="/theme-init.js"></script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />

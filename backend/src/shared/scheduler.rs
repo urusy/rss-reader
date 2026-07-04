@@ -34,10 +34,9 @@ pub fn spawn(state: AppState) {
                 tracing::error!(error = %e, "mute apply failed");
             }
             // #31: 高優先フィードの新着を Web Push で通知（ミュート適用後に評価）。
-            // VAPID 未設定なら no-op。失敗してもクロールは継続。
-            if let Err(e) = notifications::service::notify_new_articles(&state).await {
-                tracing::error!(error = %e, "push notification dispatch failed");
-            }
+            // VAPID 未設定なら no-op。独立タスクで走るため、死んだ push
+            // エンドポイントがあっても次の取得サイクルを遅らせない。
+            notifications::service::spawn_notify_new_articles(state.clone());
         }
     });
 }

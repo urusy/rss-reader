@@ -32,10 +32,20 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .context("failed to build http client")?;
 
+    // User-supplied URLs (feeds/discovery/extraction) go through this client:
+    // redirects off, `shared::fetch::safe_get` re-validates every hop (SSRF).
+    let http_external = reqwest::Client::builder()
+        .user_agent(concat!("rss-reader/", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .context("failed to build external http client")?;
+
     let state = AppState {
         db: pool,
         config: Arc::new(config),
         http,
+        http_external,
     };
 
     // Background feed-refresh loop. Swappable for apalis later (see CLAUDE.md).

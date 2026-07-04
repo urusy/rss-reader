@@ -4,8 +4,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
-COPY package.json ./
-RUN pnpm install
+# lockfile 込みで再現ビルド（監査 #7: lockfile 無しだと毎ビルドで依存が動く）
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 

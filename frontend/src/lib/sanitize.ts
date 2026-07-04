@@ -59,6 +59,18 @@ function ensureHooks(): void {
     data.attrValue = filtered;
     if (!filtered) data.keepAttr = false;
   });
+
+  // リンク: DOMPurify は既定で target を落とすため、フィード内リンクが
+  // リーダー SPA と同じタブで開いてしまう。href 持ちの <a> は新規タブ +
+  // rel="noopener noreferrer"（reverse tabnabbing 対策、監査 LOW）に統一する
+  // （DOMPurify 公式ドキュメントのレシピ）。
+  DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+    const el = node as Element;
+    if (el.tagName === "A" && el.hasAttribute("href")) {
+      el.setAttribute("target", "_blank");
+      el.setAttribute("rel", "noopener noreferrer");
+    }
+  });
 }
 
 export function sanitizeArticleHtml(html: string): string {

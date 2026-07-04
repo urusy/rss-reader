@@ -6,6 +6,7 @@ use super::domain::{extract_main_content, Extracted, FetchUrl};
 use crate::features::articles::domain::{Article, ArticleId};
 use crate::features::articles::repository as articles_repo;
 use crate::shared::error::{AppError, AppResult};
+use crate::shared::fetch::{read_body_limited, safe_get, UrlGuard};
 use crate::shared::state::AppState;
 
 /// On-demand extraction, returning the (possibly updated) article:
@@ -43,16 +44,14 @@ pub async fn extract_best_effort(state: &AppState, id: ArticleId) {
 }
 
 /// Fetch the article URL and return its HTML text. Defends size and content-type.
+/// SSRF-guarded (`safe_get`) and size-capped mid-stream (`read_body_limited`),
+/// so neither a redirect to an internal address nor a huge body gets through.
 async fn fetch_html(state: &AppState, url: &FetchUrl) -> AppResult<String> {
-    let resp = state
-        .http
-        .get(url.as_str())
-        .header("accept", "text/html,application/xhtml+xml")
-        .send()
-        .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?
-        .error_for_status()
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
+    let guard = UrlGuard::from_config(&state.config);
+    let resp = safe_get(&state.http_external, &guard, url.as_str(), |rb| {
+        rb.header("accept", "text/html,application/xhtml+xml")
+    })
+    .await?;
 
     if let Some(ct) = resp.headers().get(reqwest::header::CONTENT_TYPE) {
         let ct = ct.to_str().unwrap_or_default();
@@ -61,13 +60,7 @@ async fn fetch_html(state: &AppState, url: &FetchUrl) -> AppResult<String> {
         }
     }
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
-    if bytes.len() > state.config.extract_max_bytes {
-        return Err(AppError::Validation("page too large to extract".into()));
-    }
+    let bytes = read_body_limited(resp, state.config.extract_max_bytes).await?;
     // MVP: assume UTF-8 (lossy). Non-UTF-8 charset handling is a future task.
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
