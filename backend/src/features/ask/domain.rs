@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 pub const MAX_CONTEXT_CHARS: usize = 12_000;
 /// Total budget for the multi-article cross-Ask (divided across articles).
 pub const MAX_CONTEXT_CHARS_MULTI: usize = 16_000;
+/// 1 メッセージの最大文字数。無制限だと巨大 body がそのまま LLM 入力になる
+/// （トークン浪費 + メモリ、監査 LOW）。
+pub const MAX_MESSAGE_CHARS: usize = 8_000;
+/// 会話の最大メッセージ数（往復の暴走防止）。
+pub const MAX_MESSAGES: usize = 40;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AskMessage {
@@ -27,12 +32,20 @@ pub fn validate_conversation(messages: &[AskMessage]) -> Result<(), String> {
     if messages.is_empty() {
         return Err("messages must not be empty".into());
     }
+    if messages.len() > MAX_MESSAGES {
+        return Err(format!("too many messages (max {MAX_MESSAGES})"));
+    }
     for (i, m) in messages.iter().enumerate() {
         if m.role != "user" && m.role != "assistant" {
             return Err(format!("message[{i}].role must be 'user' or 'assistant'"));
         }
         if m.content.trim().is_empty() {
             return Err(format!("message[{i}].content must not be empty"));
+        }
+        if m.content.chars().count() > MAX_MESSAGE_CHARS {
+            return Err(format!(
+                "message[{i}].content exceeds {MAX_MESSAGE_CHARS} chars"
+            ));
         }
         let expected = if i % 2 == 0 { "user" } else { "assistant" };
         if m.role != expected {
@@ -142,6 +155,29 @@ mod tests {
         assert!(
             validate_conversation(&[m("user", "a"), m("assistant", "b"), m("user", "c")]).is_ok()
         );
+    }
+
+    // 監査 LOW: 入力サイズ無制限の防御。
+    #[test]
+    fn validate_rejects_oversized_message() {
+        let big = "x".repeat(MAX_MESSAGE_CHARS + 1);
+        assert!(validate_conversation(&[m("user", &big)]).is_err());
+        // 境界ちょうどは通る。
+        let ok = "x".repeat(MAX_MESSAGE_CHARS);
+        assert!(validate_conversation(&[m("user", &ok)]).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_too_many_messages() {
+        // user/assistant 交互で MAX_MESSAGES+1 通（user 終わり）を作る。
+        let mut msgs: Vec<AskMessage> = (0..=MAX_MESSAGES)
+            .map(|i| m(if i % 2 == 0 { "user" } else { "assistant" }, "x"))
+            .collect();
+        assert_eq!(msgs.len(), MAX_MESSAGES + 1);
+        assert!(validate_conversation(&msgs).is_err());
+        // 上限ちょうど（user 終わりに調整）は通る。
+        msgs.truncate(MAX_MESSAGES - 1);
+        assert!(validate_conversation(&msgs).is_ok());
     }
 
     #[test]

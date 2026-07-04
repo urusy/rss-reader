@@ -127,6 +127,12 @@ pub async fn notify_new_articles(state: &AppState) -> AppResult<()> {
         repository::new_priority_articles(&state.db, since, until, MAX_PER_CYCLE + 1).await?;
     let (count, watermark) = plan_cycle(&notices, MAX_PER_CYCLE as usize, until);
 
+    // ウォーターマークは**送信前に**確定させる（at-most-once、監査 LOW:
+    // send-before-commit）。送信後に commit だと、set_watermark が失敗した
+    // サイクルで全購読へ同じ通知が再送される。逆順なら最悪「送られない」で、
+    // 重複爆撃よりまし。
+    repository::set_watermark(&state.db, watermark).await?;
+
     for notice in notices.iter().take(count) {
         let payload = NotificationPayload::for_article(
             &notice.title,
@@ -144,9 +150,6 @@ pub async fn notify_new_articles(state: &AppState) -> AppResult<()> {
             "push: capped new-article notifications this cycle; the rest will go out next cycle"
         );
     }
-
-    // 送れても送れなくてもウォーターマークは進める（同じ記事の再通知を防ぐ）。
-    repository::set_watermark(&state.db, watermark).await?;
     Ok(())
 }
 

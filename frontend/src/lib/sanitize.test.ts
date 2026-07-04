@@ -91,4 +91,24 @@ describe("sanitizeArticleHtml", () => {
     );
     expect(clean).not.toContain("feed-mono");
   });
+
+  // 監査 LOW: リンクは新規タブ + noopener に統一（reverse tabnabbing 対策）。
+  it("href 付きリンクに target=_blank と rel=noopener noreferrer を強制する", () => {
+    const clean = sanitizeArticleHtml('<a href="https://example.com">link</a>');
+    expect(clean).toContain('target="_blank"');
+    expect(clean).toContain('rel="noopener noreferrer"');
+  });
+
+  it("feed 側の rel 値（opener 誘発）は上書きされる", () => {
+    const clean = sanitizeArticleHtml(
+      '<a href="https://example.com" target="_blank" rel="opener">link</a>',
+    );
+    expect(clean).toContain('rel="noopener noreferrer"');
+    expect(clean).not.toContain('rel="opener"');
+  });
+
+  it("href の無いアンカー（脚注アンカー等）には付けない", () => {
+    const clean = sanitizeArticleHtml('<a name="fn1">note</a>');
+    expect(clean).not.toContain("noopener");
+  });
 });

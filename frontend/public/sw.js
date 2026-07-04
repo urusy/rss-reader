@@ -4,6 +4,19 @@
  * fetch ハンドラは持たない（オフラインキャッシュ／リクエスト横取りはしない）。
  */
 
+/* payload の url は信用しない（監査 LOW）: http(s) に解決できる URL だけ開く。
+ * 記事 URL は外部サイトが正当なので同一オリジン限定にはしない。javascript: や
+ * data: 等のスキームだけを "/" に落とす。 */
+function safeNotificationUrl(raw) {
+  try {
+    const url = new URL(raw, self.location.origin);
+    if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+  } catch (_e) {
+    /* fall through */
+  }
+  return "/";
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -12,20 +25,23 @@ self.addEventListener("push", (event) => {
     data = { title: "新着記事", body: event.data ? event.data.text() : "", url: "/" };
   }
   const title = data.title || "新着記事";
+  const url = safeNotificationUrl(data.url || "/");
   const options = {
     body: data.body || "",
-    data: { url: data.url || "/" },
+    data: { url },
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     // 同じ記事の重複通知を1枚にまとめる。
-    tag: data.url || undefined,
+    tag: url,
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/";
+  const url = safeNotificationUrl(
+    (event.notification.data && event.notification.data.url) || "/",
+  );
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
