@@ -24,6 +24,9 @@ pub struct AppConfig {
     pub feed_refresh_interval_secs: u64,
     /// Opt-in: extract full article bodies during crawl (best-effort). Default false.
     pub extract_on_crawl: bool,
+    /// Opt-in: let feed/extraction fetches reach private/loopback addresses
+    /// (LAN-internal feeds). Default false = SSRF guard fully on.
+    pub allow_private_networks: bool,
     /// Max bytes of a fetched page we will attempt to extract (guards memory).
     pub extract_max_bytes: usize,
     /// Minimum plain-text chars for an extraction to count as "real body".
@@ -87,6 +90,11 @@ impl AppConfig {
             .unwrap_or(900);
 
         let extract_on_crawl = std::env::var("EXTRACT_ON_CRAWL")
+            .ok()
+            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
+        let allow_private_networks = std::env::var("ALLOW_PRIVATE_NETWORKS")
             .ok()
             .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(false);
@@ -178,6 +186,7 @@ impl AppConfig {
             anthropic_model,
             feed_refresh_interval_secs,
             extract_on_crawl,
+            allow_private_networks,
             extract_max_bytes,
             extract_min_chars,
             digest_enabled,
@@ -217,6 +226,7 @@ impl AppConfig {
             anthropic_model: "claude-sonnet-4-6".to_string(),
             feed_refresh_interval_secs: 900,
             extract_on_crawl: false,
+            allow_private_networks: false,
             extract_max_bytes: 3_000_000,
             extract_min_chars: 200,
             digest_enabled: false,

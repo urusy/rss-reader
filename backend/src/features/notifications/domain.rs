@@ -73,7 +73,8 @@ mod tests {
 
     #[test]
     fn payload_uses_article_title_and_feed_name() {
-        let p = NotificationPayload::for_article("新機能リリース", Some("Rust Blog"), "https://x/a");
+        let p =
+            NotificationPayload::for_article("新機能リリース", Some("Rust Blog"), "https://x/a");
         assert_eq!(p.title, "新機能リリース");
         assert_eq!(p.body, "Rust Blog");
         assert_eq!(p.url, "https://x/a");
@@ -124,7 +125,9 @@ mod tests {
 
     #[test]
     fn validate_rejects_empty_keys() {
-        assert!(sub("https://push.example/abc", "  ", "a").validate().is_err());
+        assert!(sub("https://push.example/abc", "  ", "a")
+            .validate()
+            .is_err());
         assert!(sub("https://push.example/abc", "p", "").validate().is_err());
     }
 }

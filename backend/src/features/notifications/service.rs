@@ -4,7 +4,9 @@
 use axum::http::Uri;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Utc;
-use web_push_native::{jwt_simple::algorithms::ES256KeyPair, p256::PublicKey, Auth, WebPushBuilder};
+use web_push_native::{
+    jwt_simple::algorithms::ES256KeyPair, p256::PublicKey, Auth, WebPushBuilder,
+};
 
 use super::domain::{NotificationPayload, PushSubscriptionInput};
 use super::repository::{self, StoredSubscription};
@@ -79,8 +81,11 @@ pub async fn notify_new_articles(state: &AppState) -> AppResult<()> {
     let truncated = notices.len() as i64 > MAX_PER_CYCLE;
 
     for notice in notices.iter().take(MAX_PER_CYCLE as usize) {
-        let payload =
-            NotificationPayload::for_article(&notice.title, notice.feed_title.as_deref(), &notice.url);
+        let payload = NotificationPayload::for_article(
+            &notice.title,
+            notice.feed_title.as_deref(),
+            &notice.url,
+        );
         if let Err(e) = broadcast(state, privk, &payload.to_json()).await {
             tracing::warn!(error = %e, "push broadcast failed");
         }
@@ -106,7 +111,11 @@ enum SendOutcome {
 }
 
 /// 全購読へ payload を 1 通ずつ送る。失効購読(404/410)は DB から GC。配送成功数を返す。
-async fn broadcast(state: &AppState, private_key_b64: &str, payload_json: &str) -> AppResult<usize> {
+async fn broadcast(
+    state: &AppState,
+    private_key_b64: &str,
+    payload_json: &str,
+) -> AppResult<usize> {
     let subs = repository::list_subscriptions(&state.db).await?;
     if subs.is_empty() {
         return Ok(0);
@@ -183,12 +192,15 @@ fn build_request(
         .endpoint
         .parse()
         .map_err(|e| format!("invalid push endpoint: {e}"))?;
-    let p256dh = Base64UrlUnpadded::decode_vec(&sub.p256dh)
-        .map_err(|e| format!("invalid p256dh: {e}"))?;
+    let p256dh =
+        Base64UrlUnpadded::decode_vec(&sub.p256dh).map_err(|e| format!("invalid p256dh: {e}"))?;
     let auth_bytes =
         Base64UrlUnpadded::decode_vec(&sub.auth).map_err(|e| format!("invalid auth: {e}"))?;
     if auth_bytes.len() != 16 {
-        return Err(format!("auth secret must be 16 bytes, got {}", auth_bytes.len()));
+        return Err(format!(
+            "auth secret must be 16 bytes, got {}",
+            auth_bytes.len()
+        ));
     }
     let ua_public =
         PublicKey::from_sec1_bytes(&p256dh).map_err(|e| format!("invalid p256dh point: {e}"))?;
@@ -238,11 +250,16 @@ mod tests {
         let key_pair = decode_vapid_key(VAPID_PRIVATE).unwrap();
         let sub = sample_sub();
         let req = build_request(&key_pair, &sub, br#"{"title":"t","body":"b","url":"/"}"#);
-        assert!(req.is_ok(), "should build a valid web push request: {req:?}");
+        assert!(
+            req.is_ok(),
+            "should build a valid web push request: {req:?}"
+        );
         let req = req.unwrap();
         assert_eq!(req.method(), axum::http::Method::POST);
         // Content-Encoding: aes128gcm と Authorization(vapid) が付く。
-        assert!(req.headers().contains_key(axum::http::header::AUTHORIZATION));
+        assert!(req
+            .headers()
+            .contains_key(axum::http::header::AUTHORIZATION));
     }
 
     // 壊れた購読鍵は panic せず Err を返す（auth 長不正 / p256dh 不正）。
