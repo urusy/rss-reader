@@ -211,56 +211,70 @@ export default function ListenBar(props: {
 
   return (
     <section class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2">
-      <Show
-        when={state() === "playing"}
-        fallback={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              state() === "paused" ? controller?.resume() : play()
-            }
-          >
-            {state() === "paused" ? "▶ 再開" : "▶ 読み上げ"}
+      {/* --- 再生系（トランスポート）: 主操作は塗り、補助操作は輪郭で統一 ---
+          対象選択のセグメントとは縦罫線で区切り、役割を視覚的に分ける。 */}
+      <div class="flex items-center gap-1" role="group" aria-label="再生操作">
+        <Show
+          when={state() === "playing"}
+          fallback={
+            <Button
+              size="sm"
+              onClick={() =>
+                state() === "paused" ? controller?.resume() : play()
+              }
+            >
+              {state() === "paused" ? "▶ 再開" : "▶ 読み上げ"}
+            </Button>
+          }
+        >
+          <Button size="sm" onClick={() => controller?.pause()}>
+            ⏸ 一時停止
           </Button>
-        }
-      >
-        <Button size="sm" variant="outline" onClick={() => controller?.pause()}>
-          ⏸ 一時停止
-        </Button>
-      </Show>
+        </Show>
 
-      {/* 「最初から再生」: 再開ポイントがある時（一時停止中／保存位置のある idle）だけ、
-          再開ボタンに加えて先頭からの再生を提供する。play(0) で保存 chunk を無視する。 */}
-      <Show
-        when={
-          state() === "paused" ||
-          (state() === "idle" && progress() > 0 && progress() < 1)
-        }
-      >
-        <Button size="sm" variant="ghost" onClick={() => play(0)}>
-          ⏮ 最初から
-        </Button>
-      </Show>
+        {/* 「最初から再生」: 再開ポイントがある時（一時停止中／保存位置のある idle）だけ、
+            再開ボタンに加えて先頭からの再生を提供する。play(0) で保存 chunk を無視する。 */}
+        <Show
+          when={
+            state() === "paused" ||
+            (state() === "idle" && progress() > 0 && progress() < 1)
+          }
+        >
+          <Button size="sm" variant="outline" onClick={() => play(0)}>
+            ⏮ 最初から
+          </Button>
+        </Show>
 
-      <Show when={state() !== "idle"}>
-        <Button size="sm" variant="ghost" onClick={() => controller?.stop()}>
-          ⏹ 停止
-        </Button>
-      </Show>
+        <Show when={state() !== "idle"}>
+          <Button size="sm" variant="outline" onClick={() => controller?.stop()}>
+            ⏹ 停止
+          </Button>
+        </Show>
+      </div>
 
-      {/* ソースセグメント: 要約/翻訳が生成されて選択肢が 2 つ以上ある時だけ出す。 */}
+      {/* --- 対象選択: セグメントコントロール（枠つきグループ・選択中は塗り）。
+          要約/翻訳が生成されて選択肢が 2 つ以上ある時だけ出す。 --- */}
       <Show when={props.sources().length > 1}>
-        <div class="flex gap-1">
+        <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border" />
+        <div
+          role="group"
+          aria-label="読み上げ対象"
+          class="inline-flex items-center rounded-md border border-border bg-background p-0.5"
+        >
           <For each={props.sources()}>
             {(s) => (
-              <Button
-                size="sm"
-                variant={s.key === sourceKey() ? "outline" : "ghost"}
+              <button
+                type="button"
+                aria-pressed={s.key === sourceKey()}
+                class={`rounded px-2.5 py-1 text-xs transition-colors pointer-coarse:min-h-9 ${
+                  s.key === sourceKey()
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
                 onClick={() => onSource(s.key)}
               >
                 {s.label}
-              </Button>
+              </button>
             )}
           </For>
         </div>
