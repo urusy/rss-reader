@@ -1,0 +1,55 @@
+# 本番 (x86 / Synology 等) 向け compose。
+#
+# ローカル開発用の docker-compose.yml と違い build: を持たない。本番にソースは
+# 置かず、push 済みの x86 イメージ (urusy7/rss-reader-*) を pull して起動する。
+#
+# 使い方（本番ホストで）:
+#   docker compose -f docker-compose.prod.yml pull      # urusy7 から取得
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# .env にはアプリ設定（POSTGRES_PASSWORD / ANTHROPIC_API_KEY 等）のみ置く。
+# イメージ名は下の既定 (urusy7) でまかなうので REGISTRY は書かなくてよい。
+# 別レジストリ/タグにするときだけ REGISTRY / TAG を環境変数で上書きする。
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rss}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-rss}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rss}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    image: ${REGISTRY:-urusy7}/rss-reader-backend:${TAG:-latest}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://rss:rss@db:5432/rss}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      RUST_LOG: ${RUST_LOG:-info}
+      BIND_ADDR: 0.0.0.0:8080
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      APP_AUTH_TOKEN: ${APP_AUTH_TOKEN:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ${REGISTRY:-urusy7}/rss-reader-frontend:${TAG:-latest}
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  dbdata:
