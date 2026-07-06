@@ -280,4 +280,12 @@ describe("ListenBar", () => {
     fireEvent.click(screen.getByText("▶ 読み上げ"));
     expect(synth.spoken[0].text).toBe(chunksOf(body)[0]);
   });
+
+  it("時間表示: 再生前から「経過 / 約全体（文字数÷読速の初期推定）」を出す", () => {
+    // body は "B one. B two." の13文字 → 13/7 ≒ 1.86秒 → 四捨五入で 0:02。
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    expect(screen.getByText("0:00 / 約0:02")).toBeTruthy();
+  });
 });

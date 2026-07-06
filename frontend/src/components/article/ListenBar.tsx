@@ -22,6 +22,7 @@ import {
   saveTtsPos,
   clearTtsPos,
 } from "@/lib/tts-progress";
+import { estimateTotalSecs, formatClock } from "@/lib/tts-time";
 import { Button } from "@/components/ui/button";
 
 const RATE_KEY = "tts-rate";
@@ -66,6 +67,45 @@ export default function ListenBar(props: {
   let controller: TtsController | undefined;
   let listened = false;
   let lastChunk = 0; // onChunk で更新。onRate/onVoice の位置維持に使う。
+
+  // --- 時間表示（経過 / 約全体）---
+  // 全体時間は API から取れないため推定: 初期値=文字数÷(想定読速×rate)、
+  // 実再生が進んだら 実再生秒÷進捗増分 に較正（tts-time.ts）。経過は
+  // 進捗率×推定全体 で導出し、バーと常に整合させる。セッションは play() 毎に
+  // リセット（rate/声変更も play 経由なので速度変化後は測り直しになる）。
+  const [sessMs, setSessMs] = createSignal(0); // 実再生ms（一時停止中は凍結）
+  const [sessP0, setSessP0] = createSignal<number | null>(null); // セッション開始時の進捗
+  let playingSince: number | null = null;
+  const resetTimeSession = () => {
+    setSessMs(0);
+    setSessP0(null);
+    playingSince = null;
+  };
+  createEffect(() => {
+    if (state() === "playing") {
+      playingSince = Date.now();
+      if (sessP0() === null) setSessP0(progress());
+    } else if (playingSince !== null) {
+      setSessMs((m) => m + (Date.now() - playingSince!));
+      playingSince = null;
+    }
+  });
+  // 進捗ティック（約250ms毎）に再評価される。正規化前の表示テキスト長で十分
+  // （初期推定用途。毎ティックの辞書正規化は避ける）。
+  const totalSecs = () => {
+    const playedSecs =
+      (sessMs() +
+        (state() === "playing" && playingSince !== null
+          ? Date.now() - playingSince
+          : 0)) /
+      1000;
+    return estimateTotalSecs({
+      totalChars: current()?.text.length ?? 0,
+      rate: rate(),
+      playedSecs,
+      progressDelta: Math.max(0, progress() - (sessP0() ?? progress())),
+    });
+  };
 
   onMount(() => {
     void loadVoices().then(setVoices);
@@ -135,6 +175,7 @@ export default function ListenBar(props: {
       0;
     controller?.dispose(); // 単一所有: 必ず dispose→build
     controller = build();
+    resetTimeSession(); // 時間較正はセッション（play〜stop）単位で測り直す
     controller.play(start);
   };
 
@@ -286,6 +327,13 @@ export default function ListenBar(props: {
           style={{ width: `${Math.round(progress() * 100)}%` }}
         />
       </div>
+
+      {/* 経過 / 全体（推定）。全体は較正されるまで想定読速ベースなので「約」を明示。 */}
+      <Show when={(current()?.text.length ?? 0) > 0}>
+        <span class="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {formatClock(progress() * totalSecs())} / 約{formatClock(totalSecs())}
+        </span>
+      </Show>
 
       <label class="flex items-center gap-1 text-xs text-muted-foreground">
         速度

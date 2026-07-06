@@ -92,8 +92,9 @@ export interface TtsController {
   dispose: () => void;
 }
 
-/** 進捗補間の想定読了速度（rate=1 時・1 秒あたり文字数）。おおよその体感値。 */
-const CHARS_PER_SEC = 7;
+/** 進捗補間の想定読了速度（rate=1 時・1 秒あたり文字数）。おおよその体感値。
+ *  時間表示の初期推定（tts-time.ts）とも共有する。 */
+export const CHARS_PER_SEC = 7;
 /** 進捗補間タイマーの間隔（ms）。 */
 const PROGRESS_TICK_MS = 250;
 
