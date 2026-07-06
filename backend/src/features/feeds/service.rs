@@ -17,10 +17,16 @@ const FEED_MAX_BYTES: usize = 10 * 1024 * 1024;
 pub async fn create_feed(state: &AppState, raw_url: &str) -> AppResult<Feed> {
     let url = FeedUrl::parse(raw_url).map_err(AppError::Validation)?;
     let feed = repository::insert(&state.db, url.as_str()).await?;
-    // Best-effort immediate fetch so the user sees articles right away.
-    if let Err(e) = fetch_and_store(state, &feed).await {
-        tracing::warn!(error = %e, feed = %feed.url, "initial fetch failed");
-    }
+    // Best-effort initial fetch in the background: a slow upstream must not
+    // hold up the POST response. Failures are recorded to feed_health by
+    // fetch_and_store, so they surface in the manage screen.
+    let state = state.clone();
+    let spawned = feed.clone();
+    tokio::spawn(async move {
+        if let Err(e) = fetch_and_store(&state, &spawned).await {
+            tracing::warn!(error = %e, feed = %spawned.url, "initial fetch failed");
+        }
+    });
     Ok(feed)
 }
 
@@ -121,11 +127,7 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
     let feed_title = parsed.title.as_ref().map(|t| t.content.clone());
 
     for entry in parsed.entries {
-        let url = entry
-            .links
-            .first()
-            .map(|l| l.href.clone())
-            .unwrap_or_default();
+        let url = entry_url(&entry.links).unwrap_or_default();
         if url.is_empty() {
             continue;
         }
@@ -178,4 +180,162 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
         tracing::error!(error = %e, feed = %feed.url, "rule application failed");
     }
     Ok(())
+}
+
+/// entry の links から記事本体の URL を選ぶ。
+/// Blogger 等の Atom は `rel="replies"`（コメントフィード）等が先頭に並ぶため、
+/// 先頭を盲目的に取ると「元記事を開く」がフィード URL になる。
+/// 優先順: rel="alternate"（Atom の記事本体）→ rel 無し（RSS の通常形）→ 先頭。
+fn entry_url(links: &[feed_rs::model::Link]) -> Option<String> {
+    links
+        .iter()
+        .find(|l| l.rel.as_deref() == Some("alternate"))
+        .or_else(|| links.iter().find(|l| l.rel.is_none()))
+        .or_else(|| links.first())
+        .map(|l| l.href.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::entry_url;
+    use feed_rs::parser;
+
+    /// create_feed は初回フェッチの完了を待たずに応答すること（遅いフィードでも
+    /// POST /api/feeds が即返る）。実 DB が必要なので ignored。実行方法:
+    ///   DATABASE_URL=... cargo test create_feed_returns -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn create_feed_returns_before_initial_fetch_completes() {
+        use crate::shared::config::AppConfig;
+        use crate::shared::state::AppState;
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+
+        let db = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").expect("DATABASE_URL"))
+            .await
+            .expect("connect");
+        let mut config = AppConfig::for_test();
+        // ローカルテストサーバー(127.0.0.1)を SSRF ガードに通すため
+        config.allow_private_networks = true;
+        let state = AppState {
+            db: db.clone(),
+            config: Arc::new(config),
+            http: reqwest::Client::new(),
+            http_external: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap(),
+            login_limiter: Arc::new(std::sync::Mutex::new(
+                crate::shared::auth::LoginLimiter::default(),
+            )),
+        };
+
+        // 2秒待ってから RSS を返すローカルサーバー（遅い外部サイトの再現）
+        const FETCH_DELAY: Duration = Duration::from_secs(2);
+        let item_url = format!("https://blog.example/bg-test-{}", uuid::Uuid::new_v4());
+        let rss = format!(
+            r#"<?xml version="1.0"?>
+            <rss version="2.0"><channel><title>bg test</title>
+              <item><title>post</title><link>{item_url}</link></item>
+            </channel></rss>"#
+        );
+        let app = axum::Router::new().route(
+            "/feed",
+            axum::routing::get(move || {
+                let rss = rss.clone();
+                async move {
+                    tokio::time::sleep(FETCH_DELAY).await;
+                    rss
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let started = Instant::now();
+        let feed = super::create_feed(&state, &format!("http://{addr}/feed"))
+            .await
+            .expect("create_feed");
+        let elapsed = started.elapsed();
+
+        // 背景フェッチはいずれ完走し、記事が保存されること（最大10秒待つ）
+        let mut stored = 0i64;
+        for _ in 0..50 {
+            let (n,): (i64,) =
+                sqlx::query_as("SELECT count(*) FROM articles WHERE feed_id = $1")
+                    .bind(feed.id.0)
+                    .fetch_one(&db)
+                    .await
+                    .unwrap();
+            if n > 0 {
+                stored = n;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+
+        // 後始末（unique 制約を汚さない）
+        sqlx::query("DELETE FROM articles WHERE feed_id = $1")
+            .bind(feed.id.0)
+            .execute(&db)
+            .await
+            .unwrap();
+        super::delete_feed(&state, feed.id).await.unwrap();
+
+        assert!(stored > 0, "background fetch did not store articles");
+        assert!(
+            elapsed < FETCH_DELAY,
+            "create_feed blocked on the initial fetch: {elapsed:?}"
+        );
+    }
+
+    fn entry_links(xml: &str) -> Vec<feed_rs::model::Link> {
+        let parsed = parser::parse(xml.as_bytes()).expect("parse");
+        parsed.entries.into_iter().next().expect("entry").links
+    }
+
+    #[test]
+    fn atom_prefers_rel_alternate_over_replies() {
+        // Blogger 実物の並び: replies (atom) → replies (html) → edit → self → alternate
+        let links = entry_links(
+            r#"<?xml version="1.0"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <id>tag:blog</id><title>t</title><updated>2026-01-01T00:00:00Z</updated>
+              <entry>
+                <id>tag:post</id><title>post</title><updated>2026-01-01T00:00:00Z</updated>
+                <link rel="replies" type="application/atom+xml" href="https://blog.example/feeds/1/comments/default"/>
+                <link rel="replies" type="text/html" href="https://blog.example/2026/01/post.html#comment-form"/>
+                <link rel="edit" href="https://www.blogger.com/feeds/9/posts/default/1"/>
+                <link rel="self" href="https://www.blogger.com/feeds/9/posts/default/1"/>
+                <link rel="alternate" type="text/html" href="https://blog.example/2026/01/post.html"/>
+              </entry>
+            </feed>"#,
+        );
+        assert_eq!(
+            entry_url(&links).as_deref(),
+            Some("https://blog.example/2026/01/post.html")
+        );
+    }
+
+    #[test]
+    fn rss_single_link_is_used() {
+        let links = entry_links(
+            r#"<?xml version="1.0"?>
+            <rss version="2.0"><channel><title>t</title>
+              <item><title>post</title><link>https://blog.example/post</link></item>
+            </channel></rss>"#,
+        );
+        assert_eq!(
+            entry_url(&links).as_deref(),
+            Some("https://blog.example/post")
+        );
+    }
+
+    #[test]
+    fn no_links_returns_none() {
+        assert_eq!(entry_url(&[]), None);
+    }
 }
