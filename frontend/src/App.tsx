@@ -24,10 +24,14 @@ const App: ParentComponent = (props) => {
     max: 480,
   });
 
+  // LoginGate を最外殻にする（AppProvider より外）。逆順だと未認証のページ読込時に
+  // AppProvider の createResource が保護 API へ先走って 401 になり、ログイン成功後も
+  // 再取得されずサイドバーが空のままになる。認証後に AppProvider がマウントされる
+  // ことで、データ取得は常にセッション確立後になる。
   return (
-    <AppProvider>
-      <KeyboardShortcuts />
-      <LoginGate>
+    <LoginGate>
+      <AppProvider>
+        <KeyboardShortcuts />
         <div
           class="relative min-h-dvh bg-background text-foreground lg:grid lg:grid-cols-[var(--sidebar-w)_1fr]"
           style={{ "--sidebar-w": `${sidebar.width()}px` }}
@@ -46,8 +50,8 @@ const App: ParentComponent = (props) => {
             </main>
           </div>
         </div>
-      </LoginGate>
-    </AppProvider>
+      </AppProvider>
+    </LoginGate>
   );
 };
 

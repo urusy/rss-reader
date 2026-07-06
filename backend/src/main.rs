@@ -46,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         http,
         http_external,
+        login_limiter: Arc::new(std::sync::Mutex::new(shared::auth::LoginLimiter::default())),
     };
 
     // Background feed-refresh loop. Swappable for apalis later (see CLAUDE.md).

@@ -1,23 +1,40 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getToken, setToken, clearToken, authToken } from "./auth";
+import { authState, setAuthState, onUnauthorized } from "./auth";
 
-describe("lib/auth token store", () => {
+describe("lib/auth state machine", () => {
   beforeEach(() => {
-    clearToken();
+    setAuthState("unknown");
   });
 
-  it("setToken persists to localStorage and signal", () => {
-    setToken("abc123");
-    expect(getToken()).toBe("abc123");
-    expect(authToken()).toBe("abc123");
-    expect(localStorage.getItem("auth_token")).toBe("abc123");
+  it("starts unknown and transitions via setAuthState", () => {
+    expect(authState()).toBe("unknown");
+    setAuthState("setup");
+    expect(authState()).toBe("setup");
+    setAuthState("authed");
+    expect(authState()).toBe("authed");
   });
 
-  it("clearToken removes from localStorage and signal", () => {
-    setToken("abc123");
-    clearToken();
-    expect(getToken()).toBeNull();
-    expect(authToken()).toBeNull();
+  it("onUnauthorized drops an authed session to login", () => {
+    setAuthState("authed");
+    onUnauthorized();
+    expect(authState()).toBe("login");
+  });
+
+  it("onUnauthorized does not disturb setup flow", () => {
+    // セットアップ画面表示中に保護 API が 401 を返しても setup 判定を壊さない。
+    setAuthState("setup");
+    onUnauthorized();
+    expect(authState()).toBe("setup");
+  });
+
+  it("onUnauthorized keeps unknown until status resolves", () => {
+    onUnauthorized();
+    expect(authState()).toBe("unknown");
+  });
+
+  it("never persists anything to localStorage (cookie is HttpOnly)", () => {
+    setAuthState("authed");
     expect(localStorage.getItem("auth_token")).toBeNull();
+    expect(localStorage.length).toBe(0);
   });
 });

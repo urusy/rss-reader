@@ -30,8 +30,9 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       FEED_REFRESH_INTERVAL_SECS: ${FEED_REFRESH_INTERVAL_SECS:-900}
-      # Auth: unset = disabled (LAN default). Set to require Bearer token on /api.
-      AUTH_TOKEN: ${AUTH_TOKEN:-}
+      # Auth: パスワードは初回アクセス時に画面から設定（env 不要）。HTTPS 終端が
+      # ある構成でだけ COOKIE_SECURE=true にする（http LAN では付けない）。
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
       # Backup: unset = /api/backup/* returns 503. Optional pg_dump scheduler off
       # unless BACKUP_DIR + interval are both set.
       BACKUP_TOKEN: ${BACKUP_TOKEN:-}

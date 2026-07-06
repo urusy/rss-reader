@@ -38,13 +38,15 @@ use crate::shared::state::AppState;
 /// Each feature owns its own `routes()` returning a `Router<AppState>`. Adding a
 /// feature = add one module + one `.merge()` line. Existing slices stay untouched.
 ///
-/// Routes split into public (health + auth login/status) and protected (the
-/// rest). The protected subrouter carries `require_auth`; with AUTH_TOKEN unset
-/// the middleware is a pass-through, so behavior is unchanged by default.
+/// Routes split into public (health + auth setup/login/status) and protected
+/// (the rest). The protected subrouter carries `require_auth`, which demands a
+/// valid session cookie — until the initial password setup completes, every
+/// protected route answers 401 (secure by default).
 pub fn router(state: AppState) -> Router {
     let public = Router::new().merge(health::routes()).merge(auth::routes());
 
     let protected = Router::new()
+        .merge(auth::protected_routes())
         .merge(feeds::routes())
         .merge(feed_discovery::routes())
         .merge(articles::routes())
@@ -95,6 +97,8 @@ fn cors_layer(config: &AppConfig) -> CorsLayer {
                 .ok()
         })
         .collect();
+    // Cookie セッションを別オリジンから送るには credentials の明示許可が要る
+    // （許可リストが明示オリジンのみなので wildcard 制約には抵触しない）。
     CorsLayer::new()
         .allow_origin(origins)
         .allow_methods([
@@ -104,7 +108,8 @@ fn cors_layer(config: &AppConfig) -> CorsLayer {
             Method::PUT,
             Method::DELETE,
         ])
-        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+        .allow_headers([header::CONTENT_TYPE])
+        .allow_credentials(true)
 }
 
 #[cfg(test)]
@@ -119,13 +124,16 @@ mod tests {
         let db = sqlx::postgres::PgPoolOptions::new()
             .connect_lazy("postgres://invalid/invalid")
             .unwrap();
-        let mut config = AppConfig::for_test(None);
+        let mut config = AppConfig::for_test();
         config.cors_allowed_origins = origins;
         AppState {
             db,
             config: Arc::new(config),
             http: reqwest::Client::new(),
             http_external: reqwest::Client::new(),
+            login_limiter: Arc::new(std::sync::Mutex::new(
+                crate::shared::auth::LoginLimiter::default(),
+            )),
         }
     }
 

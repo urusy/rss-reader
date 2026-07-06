@@ -1,8 +1,18 @@
 // Thin typed client over the Rust backend. All paths are proxied to :8080 in dev.
-import { getToken, clearToken } from "@/lib/auth";
+// 認証はセッション Cookie（HttpOnly, same-origin）。JS はトークンを一切保持しない。
+import { onUnauthorized } from "@/lib/auth";
 
 export interface AuthStatus {
-  required: boolean;
+  setup_required: boolean;
+  authenticated: boolean;
+}
+
+export interface SessionInfo {
+  id: string;
+  label: string | null;
+  created_at: string;
+  last_seen_at: string;
+  current: boolean;
 }
 
 export interface ImportSummary {
@@ -23,13 +33,9 @@ export interface BackupRun {
   error: string | null;
 }
 
-// backup 用ヘッダ: X-Backup-Token（backup gate）＋ auth 有効時の Authorization。
+// backup 用ヘッダ: X-Backup-Token（backup gate）。認証はセッション Cookie が担う。
 function backupHeaders(backupToken: string): Record<string, string> {
-  const authToken = getToken();
-  return {
-    "X-Backup-Token": backupToken,
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-  };
+  return { "X-Backup-Token": backupToken };
 }
 
 export interface Feed {
@@ -333,18 +339,18 @@ export function errorStatus(e: unknown): number | null {
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
   const res = await fetch(path, {
     ...init,
+    // セッション Cookie を明示（same-origin 既定と同じだが契約として固定する）。
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
-      // トークンがあれば全リクエストに付与。init.headers を最後に展開し上書き可能に保つ。
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // init.headers を最後に展開し上書き可能に保つ。
       ...(init?.headers ?? {}),
     },
   });
   if (res.status === 401) {
-    clearToken(); // 失効/誤トークン → ゲート表示へ（authToken signal が反応）
+    onUnauthorized(); // セッション失効 → ゲート表示へ（authState signal が反応）
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -504,12 +510,9 @@ export const api = {
       headers: { "Content-Type": "application/xml" },
       body: xml,
     }),
-  // 認証有効時もヘッダが載るよう fetch+Blob で取得（アンカーだと Bearer が付かない）。
+  // Cookie 認証なので追加ヘッダ不要（Blob で受けてダウンロードさせる）。
   exportOpml: async (): Promise<Blob> => {
-    const token = getToken();
-    const res = await fetch(OPML_EXPORT_URL, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const res = await fetch(OPML_EXPORT_URL, { credentials: "same-origin" });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
     return res.blob();
   },
@@ -640,16 +643,19 @@ export const api = {
       body: JSON.stringify({ force }),
     }),
   // --- バックアップ / 復元 ---
-  // backup token は X-Backup-Token で送る（auth middleware の Authorization と衝突しない）。
-  // auth 有効時のため Authorization: Bearer <auth_token> も併せて付与する。
+  // backup token は X-Backup-Token で送る。API 認証はセッション Cookie が担う。
   exportBackup: async (token: string): Promise<Blob> => {
-    const res = await fetch("/api/backup/export", { headers: backupHeaders(token) });
+    const res = await fetch("/api/backup/export", {
+      credentials: "same-origin",
+      headers: backupHeaders(token),
+    });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
     return res.blob();
   },
   importBackup: async (token: string, ndjson: string): Promise<ImportSummary> => {
     const res = await fetch("/api/backup/import", {
       method: "POST",
+      credentials: "same-origin",
       headers: { ...backupHeaders(token), "Content-Type": "application/x-ndjson" },
       body: ndjson,
     });
@@ -657,7 +663,10 @@ export const api = {
     return res.json();
   },
   listBackupRuns: async (token: string): Promise<BackupRun[]> => {
-    const res = await fetch("/api/backup/runs", { headers: backupHeaders(token) });
+    const res = await fetch("/api/backup/runs", {
+      credentials: "same-origin",
+      headers: backupHeaders(token),
+    });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
     return res.json();
   },
@@ -681,12 +690,28 @@ export const api = {
     }),
   deleteHighlight: (hid: string) =>
     http<void>(`/api/highlights/${hid}`, { method: "DELETE" }),
-  // ゲート要否（公開エンドポイント。トークン無しでも 200）。
+  // --- 認証（セッション Cookie） ---
+  // ゲート判定（公開エンドポイント。Cookie 無しでも 200）。
   getAuthStatus: () => http<AuthStatus>("/api/auth/status"),
-  // トークン検証（保存前/起動時チェック）。不一致は 401 を throw。
-  login: (token: string) =>
+  // 初回セットアップ（パスワード設定 + 即ログイン）。設定済みなら 409 を throw。
+  setupPassword: (password: string) =>
+    http<{ ok: boolean }>("/api/auth/setup", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  // ログイン。不一致 401 / バックオフ中 429 を throw。成功で Set-Cookie。
+  login: (password: string) =>
     http<{ ok: boolean }>("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ password }),
     }),
+  logout: () => http<void>("/api/auth/logout", { method: "POST" }),
+  changePassword: (current_password: string, new_password: string) =>
+    http<void>("/api/auth/password", {
+      method: "PUT",
+      body: JSON.stringify({ current_password, new_password }),
+    }),
+  listSessions: () => http<SessionInfo[]>("/api/auth/sessions"),
+  revokeSession: (id: string) =>
+    http<void>(`/api/auth/sessions/${id}`, { method: "DELETE" }),
 };

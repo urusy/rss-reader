@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use sqlx::PgPool;
 
+use super::auth::LoginLimiter;
 use super::config::AppConfig;
 
 /// Shared application state, cheap to clone (Arc + pool handle + reqwest client).
@@ -9,6 +10,8 @@ use super::config::AppConfig;
 pub struct AppState {
     pub db: PgPool,
     pub config: Arc<AppConfig>,
+    /// ログイン失敗の指数バックオフ状態（プロセス内・全接続共有）。
+    pub login_limiter: Arc<Mutex<LoginLimiter>>,
     /// Client for fixed, trusted endpoints (Anthropic API, push services,
     /// Instapaper). Follows redirects automatically.
     pub http: reqwest::Client,

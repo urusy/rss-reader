@@ -10,8 +10,9 @@ pub struct AppConfig {
     pub bind_addr: SocketAddr,
     /// Optional until the summarization/translation feature is enabled.
     pub anthropic_api_key: Option<String>,
-    /// Shared bearer token guarding /api. None (unset) = auth disabled (LAN default).
-    pub auth_token: Option<String>,
+    /// Set the Secure attribute on the session cookie. Opt-in: http-only LAN
+    /// deployments would silently lose the cookie if this were forced on.
+    pub cookie_secure: bool,
     /// Token gating /api/backup/*. None = backup feature disabled (503).
     pub backup_token: Option<String>,
     /// Output dir for the optional scheduled pg_dump. None = scheduler disabled.
@@ -77,7 +78,17 @@ impl AppConfig {
             .ok()
             .filter(|v| !v.is_empty());
 
-        let auth_token = std::env::var("AUTH_TOKEN").ok().filter(|v| !v.is_empty());
+        // AUTH_TOKEN(共有トークン認証)は廃止。残っていたら移行漏れを知らせる。
+        if std::env::var("AUTH_TOKEN").is_ok_and(|v| !v.is_empty()) {
+            tracing::warn!(
+                "AUTH_TOKEN is no longer used; password login has replaced it (remove the env var)"
+            );
+        }
+
+        let cookie_secure = std::env::var("COOKIE_SECURE")
+            .ok()
+            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
 
         let backup_token = std::env::var("BACKUP_TOKEN").ok().filter(|v| !v.is_empty());
         let backup_dir = std::env::var("BACKUP_DIR").ok().filter(|v| !v.is_empty());
@@ -193,7 +204,7 @@ impl AppConfig {
             database_url,
             bind_addr,
             anthropic_api_key,
-            auth_token,
+            cookie_secure,
             backup_token,
             backup_dir,
             backup_pgdump_interval_secs,
@@ -226,15 +237,15 @@ impl AppConfig {
         })
     }
 
-    /// Minimal config for unit/integration tests. Only `auth_token` is meaningful;
-    /// other fields get harmless defaults. Test-only, never used in production.
+    /// Minimal config for unit/integration tests; every field gets a harmless
+    /// default. Test-only, never used in production.
     #[cfg(test)]
-    pub fn for_test(auth_token: Option<String>) -> Self {
+    pub fn for_test() -> Self {
         Self {
             database_url: "postgres://invalid/invalid".to_string(),
             bind_addr: "0.0.0.0:8080".parse().unwrap(),
             anthropic_api_key: None,
-            auth_token,
+            cookie_secure: false,
             backup_token: None,
             backup_dir: None,
             backup_pgdump_interval_secs: None,

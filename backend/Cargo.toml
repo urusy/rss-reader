@@ -54,6 +54,16 @@ quick-xml = "0.41.0"
 # superboring=純Rust）。openssl 非依存。メッセージ組み立てのみ担い、送信は既存
 # reqwest(rustls) で行う（http crate は 1.x で reqwest/axum と共通）。
 web-push-native = "0.4"
+
+# ログイン機能: パスワードは Argon2id（PHC 文字列）。セッショントークンの乱数も
+# 同梱の password_hash::rand_core::OsRng を使う（rand を別途足さない）。
+argon2 = "0.5"
+# セッショントークンの DB 保存はハッシュのみ（平文保存禁止）。
+sha2 = "0.10"
+# セッション Cookie の読み書き（axum 0.8 対応系列は 0.10）。
+axum-extra = { version = "0.10", features = ["cookie"] }
+# Cookie の Max-Age 指定（cookie crate が time::Duration を要求。既に推移依存に存在）。
+time = "0.3"
 # VAPID 鍵・購読鍵の base64url(no pad) デコード用（web-push-native と同じ実装）。
 base64ct = { version = "1", features = ["alloc"] }
 

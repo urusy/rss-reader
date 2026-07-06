@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useApp } from "@/lib/store";
 import MuteRulesManager from "@/components/mute/MuteRulesManager";
+import AccountSettingsCard from "@/components/settings/AccountSettingsCard";
 import LlmSettingsCard from "@/components/settings/LlmSettingsCard";
 import TtsDictCard from "@/components/settings/TtsDictCard";
 import PushSettingsCard from "@/components/settings/PushSettingsCard";
@@ -236,6 +237,8 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <AccountSettingsCard />
 
       <LlmSettingsCard />
 
