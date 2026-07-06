@@ -1,6 +1,7 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import { useApp } from "@/lib/store";
 import { api, type DiscoveredFeed } from "@/lib/api";
+import { scheduleFollowUpRefetch } from "@/lib/refetch-later";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,16 @@ export function AddFeedDialog() {
     setCandidates(null);
     setError(null);
   };
+
+  // 初回クロールはバックエンドで背景実行されるため、追加直後の一覧には
+  // タイトル・未読数がまだ無い。少し置いて再取得し、確定値を反映する。
+  let cancelFollowUp: (() => void) | undefined;
+  const refetchFeedsWithFollowUp = () => {
+    app.refetchFeeds();
+    cancelFollowUp?.();
+    cancelFollowUp = scheduleFollowUpRefetch(() => app.refetchFeeds());
+  };
+  onCleanup(() => cancelFollowUp?.());
 
   const discover = async () => {
     const v = url().trim();
@@ -51,7 +62,7 @@ export function AddFeedDialog() {
     setError(null);
     try {
       await api.addFeed(v);
-      app.refetchFeeds();
+      refetchFeedsWithFollowUp();
       reset();
       setOpen(false);
     } catch (e) {
@@ -65,7 +76,7 @@ export function AddFeedDialog() {
     setBusy(true);
     try {
       await api.addFeed(c.url);
-      app.refetchFeeds();
+      refetchFeedsWithFollowUp();
       setCandidates((cs) =>
         (cs ?? []).map((x) =>
           x.url === c.url ? { ...x, already_subscribed: true } : x,
