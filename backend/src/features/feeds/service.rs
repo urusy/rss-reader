@@ -126,48 +126,47 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
 
     let feed_title = parsed.title.as_ref().map(|t| t.content.clone());
 
-    for entry in parsed.entries {
-        let url = entry_url(&entry.links).unwrap_or_default();
-        if url.is_empty() {
-            continue;
-        }
-        let title = entry
-            .title
-            .as_ref()
-            .map(|t| t.content.clone())
-            .unwrap_or_else(|| "(untitled)".to_string());
-        let content = entry
-            .content
-            .as_ref()
-            .and_then(|c| c.body.clone())
-            .or_else(|| entry.summary.as_ref().map(|s| s.content.clone()))
-            .unwrap_or_default();
-        let published = entry.published.or(entry.updated);
-
-        articles::repository::upsert(
-            &state.db,
-            FeedId(feed.id.0),
-            &url,
-            &title,
-            &content,
-            published,
-        )
-        .await?;
-
-        // #28: persist the author so rule conditions can match it (best-effort).
-        if let Some(author) = entry.authors.first().map(|p| p.name.clone()) {
-            if !author.trim().is_empty() {
-                let _ = articles::repository::set_author(&state.db, &url, &author).await;
+    // エントリを集めて1クエリで一括 upsert（記事ごとの直列 3 クエリをやめ、
+    // エントリの多いフィードの取込みを速くする）。author（#28 ルール条件用）も
+    // 同じ INSERT に畳む（既存値優先の意味論は upsert_batch 側が持つ）。
+    let items: Vec<articles::repository::NewArticle> = parsed
+        .entries
+        .into_iter()
+        .filter_map(|entry| {
+            let url = entry_url(&entry.links)?;
+            if url.is_empty() {
+                return None;
             }
-        }
+            Some(articles::repository::NewArticle {
+                url,
+                title: entry
+                    .title
+                    .as_ref()
+                    .map(|t| t.content.clone())
+                    .unwrap_or_else(|| "(untitled)".to_string()),
+                content: entry
+                    .content
+                    .as_ref()
+                    .and_then(|c| c.body.clone())
+                    .or_else(|| entry.summary.as_ref().map(|s| s.content.clone()))
+                    .unwrap_or_default(),
+                published_at: entry.published.or(entry.updated),
+                author: entry
+                    .authors
+                    .first()
+                    .map(|p| p.name.clone())
+                    .filter(|a| !a.trim().is_empty()),
+            })
+        })
+        .collect();
+    let stored = articles::repository::upsert_batch(&state.db, FeedId(feed.id.0), &items).await?;
 
-        // Optional crawl-time full-content extraction (EXTRACT_ON_CRAWL=true).
-        // Best-effort + idempotent (skips already-extracted rows). Default off,
-        // so behavior is unchanged unless explicitly opted in.
-        if state.config.extract_on_crawl {
-            if let Some(id) = articles::repository::id_by_url(&state.db, &url).await? {
-                crate::features::extraction::service::extract_best_effort(state, id).await;
-            }
+    // Optional crawl-time full-content extraction (EXTRACT_ON_CRAWL=true).
+    // Best-effort + idempotent (skips already-extracted rows). Default off,
+    // so behavior is unchanged unless explicitly opted in.
+    if state.config.extract_on_crawl {
+        for (id, _url) in &stored {
+            crate::features::extraction::service::extract_best_effort(state, *id).await;
         }
     }
 
@@ -264,12 +263,11 @@ mod tests {
         // 背景フェッチはいずれ完走し、記事が保存されること（最大10秒待つ）
         let mut stored = 0i64;
         for _ in 0..50 {
-            let (n,): (i64,) =
-                sqlx::query_as("SELECT count(*) FROM articles WHERE feed_id = $1")
-                    .bind(feed.id.0)
-                    .fetch_one(&db)
-                    .await
-                    .unwrap();
+            let (n,): (i64,) = sqlx::query_as("SELECT count(*) FROM articles WHERE feed_id = $1")
+                .bind(feed.id.0)
+                .fetch_one(&db)
+                .await
+                .unwrap();
             if n > 0 {
                 stored = n;
                 break;
