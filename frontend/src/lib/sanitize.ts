@@ -28,7 +28,7 @@ const SAFE_STYLE_PROPS = new Set([
 const MONO_RE = /font-family\s*:[^;]*(monospace|mono|courier|consolas|menlo|monaco|source\s*code)/i;
 
 function filterInlineStyle(value: string): string {
-  return value
+  const kept = value
     .split(";")
     .map((decl) => decl.trim())
     .filter(Boolean)
@@ -36,8 +36,52 @@ function filterInlineStyle(value: string): string {
       const i = decl.indexOf(":");
       if (i < 0) return false;
       return SAFE_STYLE_PROPS.has(decl.slice(0, i).trim().toLowerCase());
-    })
-    .join("; ");
+    });
+  return ensureReadableTextColor(kept).join("; ");
+}
+
+// 補完する対比色。テーマの前景色ではなく固定値（背景も inline の固定色なので、
+// テーマに追従させるとかえって明るい背景 × 白文字の事故が再発する）。
+const DARK_TEXT = "#1f2937";
+const LIGHT_TEXT = "#f5f5f5";
+
+/**
+ * 背景色だけ指定して文字色を指定しない要素は、テーマの文字色（ダークでは白）を
+ * 継承して「明るい背景 × 白文字」で読めなくなる（Google Testing Blog の
+ * 色分けコード表で実害）。背景の明度から対比色を補完する。
+ * 背景色を解釈できない場合（named color 等）は何もしない。
+ */
+function ensureReadableTextColor(decls: string[]): string[] {
+  const get = (prop: string) =>
+    decls.find((d) => d.slice(0, d.indexOf(":")).trim().toLowerCase() === prop);
+  const bg = get("background-color");
+  if (!bg || get("color")) return decls;
+  const lum = relativeLuminance(bg.slice(bg.indexOf(":") + 1).trim());
+  if (lum === null) return decls;
+  return [...decls, `color: ${lum > 0.5 ? DARK_TEXT : LIGHT_TEXT}`];
+}
+
+/** #rgb / #rrggbb / rgb(r,g,b) / rgba(r,g,b,a) を 0..1 の輝度へ。解釈不能は null。 */
+function relativeLuminance(cssColor: string): number | null {
+  let r: number, g: number, b: number;
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(cssColor);
+  const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(
+    cssColor,
+  );
+  if (hex) {
+    const h = hex[1];
+    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+    r = parseInt(full.slice(0, 2), 16);
+    g = parseInt(full.slice(2, 4), 16);
+    b = parseInt(full.slice(4, 6), 16);
+  } else if (rgb) {
+    // ほぼ透明な背景は下地が透けるので判定しない。
+    if (rgb[4] !== undefined && parseFloat(rgb[4]) < 0.5) return null;
+    [r, g, b] = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  } else {
+    return null;
+  }
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
 let hooksRegistered = false;

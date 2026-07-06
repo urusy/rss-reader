@@ -111,4 +111,62 @@ describe("sanitizeArticleHtml", () => {
     const clean = sanitizeArticleHtml('<a name="fn1">note</a>');
     expect(clean).not.toContain("noopener");
   });
+
+  // 背景色つき・文字色なしの要素はテーマの文字色（ダークだと白）を継承して
+  // 「明るい背景 × 白文字」で読めなくなる（Google Testing Blog の緑背景コード表で実害）。
+  // 背景の明度から対比色を補完し、テーマに依存せず読めるようにする。
+  describe("背景色に対する文字色の自動補完", () => {
+    it("明るい背景（hex）+ 文字色なし → 濃い文字色を補う", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: #d9ead3">code</td></tr></tbody></table>',
+      );
+      expect(clean).toContain("background-color: #d9ead3");
+      expect(clean).toMatch(/color:\s*#1f2937/);
+    });
+
+    it("暗い背景 + 文字色なし → 明るい文字色を補う", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: #282c34">code</td></tr></tbody></table>',
+      );
+      expect(clean).toMatch(/color:\s*#f5f5f5/);
+    });
+
+    it("文字色が明示されている場合は補完しない", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: #d9ead3; color: #ff0000">code</td></tr></tbody></table>',
+      );
+      expect(clean).toContain("color: #ff0000");
+      expect(clean).not.toContain("#1f2937");
+    });
+
+    it("rgb() 形式の明るい背景も解釈して補完する", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: rgb(244, 204, 204)">code</td></tr></tbody></table>',
+      );
+      expect(clean).toMatch(/color:\s*#1f2937/);
+    });
+
+    it("3桁 hex（#fcc）も解釈する", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: #fcc">code</td></tr></tbody></table>',
+      );
+      expect(clean).toMatch(/color:\s*#1f2937/);
+    });
+
+    it("解釈できない背景値（named color 等）は触らない", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: papayawhip">code</td></tr></tbody></table>',
+      );
+      expect(clean).not.toContain("#1f2937");
+      expect(clean).not.toContain("#f5f5f5");
+    });
+
+    it("子要素の明示的な文字色（コメントの青等）は影響を受けず残る", () => {
+      const clean = sanitizeArticleHtml(
+        '<table><tbody><tr><td style="background-color: #d9ead3"><span style="color: #1155cc">// comment</span><span>code</span></td></tr></tbody></table>',
+      );
+      expect(clean).toContain("color: #1155cc"); // 明示色は保持
+      expect(clean).toMatch(/color:\s*#1f2937/); // td には補完色
+    });
+  });
 });
