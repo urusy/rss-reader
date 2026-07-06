@@ -33,6 +33,7 @@ import {
 import { Prose } from "@/components/ui/prose";
 import { renderMarkdown } from "@/lib/markdown";
 import ArticleAsk from "@/components/article/ArticleAsk";
+import RegenerateConfirm from "@/components/article/RegenerateConfirm";
 import { StarToggle, Highlights } from "@/components/article/Annotations";
 import ListenBar, { type ListenSource } from "@/components/article/ListenBar";
 import { htmlToPlainText } from "@/lib/tts";
@@ -301,29 +302,53 @@ export default function ArticleDetail(props: { id: string | undefined }) {
 
           <div class="flex flex-wrap gap-2">
             <StarToggle articleId={a().id} />
-            <Button
-              size="sm"
-              onClick={() => run("summarize", !!a().summary)}
-              disabled={busy() !== null}
+            {/* 初回生成は即実行。キャッシュがある「再要約/再翻訳」だけ確認を挟む
+                （誤タップ1回で Claude を呼び直してトークンを消費しない）。 */}
+            <Show
+              when={a().summary}
+              fallback={
+                <Button
+                  size="sm"
+                  onClick={() => run("summarize")}
+                  disabled={busy() !== null}
+                >
+                  {busy() === "summarize" ? "要約中…" : "要約 (Claude)"}
+                </Button>
+              }
             >
-              {busy() === "summarize"
-                ? "要約中…"
-                : a().summary
-                  ? "再要約 (Claude)"
-                  : "要約 (Claude)"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => run("translate", !!a().translation)}
-              disabled={busy() !== null}
+              <RegenerateConfirm
+                label="要約"
+                trigger="再要約 (Claude)"
+                busyText="要約中…"
+                busy={busy() === "summarize"}
+                disabled={busy() !== null}
+                variant="default"
+                onConfirm={() => run("summarize", true)}
+              />
+            </Show>
+            <Show
+              when={a().translation}
+              fallback={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => run("translate")}
+                  disabled={busy() !== null}
+                >
+                  {busy() === "translate" ? "翻訳中…" : "翻訳 (Claude)"}
+                </Button>
+              }
             >
-              {busy() === "translate"
-                ? "翻訳中…"
-                : a().translation
-                  ? "再翻訳 (Claude)"
-                  : "翻訳 (Claude)"}
-            </Button>
+              <RegenerateConfirm
+                label="翻訳"
+                trigger="再翻訳 (Claude)"
+                busyText="翻訳中…"
+                busy={busy() === "translate"}
+                disabled={busy() !== null}
+                variant="outline"
+                onConfirm={() => run("translate", true)}
+              />
+            </Show>
             <Button
               size="sm"
               variant="outline"
