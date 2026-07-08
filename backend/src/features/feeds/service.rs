@@ -48,6 +48,7 @@ pub async fn update_feed(
     title: Option<String>,
     folder_id: Option<Option<FolderId>>,
     priority: Option<i16>,
+    extract_full_content: Option<bool>,
 ) -> AppResult<Feed> {
     if let Some(t) = &title {
         if t.trim().is_empty() {
@@ -66,7 +67,15 @@ pub async fn update_feed(
             return Err(AppError::Validation("folder not found".into()));
         }
     }
-    repository::update(&state.db, id, title.as_deref(), folder_id, priority).await
+    repository::update(
+        &state.db,
+        id,
+        title.as_deref(),
+        folder_id,
+        priority,
+        extract_full_content,
+    )
+    .await
 }
 
 /// 単一フィードのみ再取得（従来の全件 refresh ではなく当該フィードだけ）。
@@ -161,10 +170,12 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
         .collect();
     let stored = articles::repository::upsert_batch(&state.db, FeedId(feed.id.0), &items).await?;
 
-    // Optional crawl-time full-content extraction (EXTRACT_ON_CRAWL=true).
-    // Best-effort + idempotent (skips already-extracted rows). Default off,
-    // so behavior is unchanged unless explicitly opted in.
-    if state.config.extract_on_crawl {
+    // Optional crawl-time full-content extraction. Enabled globally
+    // (EXTRACT_ON_CRAWL=true) or per feed (feeds.extract_full_content —
+    // ヘッドラインのみのフィード向け)。Best-effort + idempotent (skips
+    // already-extracted rows). Default off, so behavior is unchanged
+    // unless explicitly opted in.
+    if auto_extract_enabled(state.config.extract_on_crawl, feed.extract_full_content) {
         for (id, _url) in &stored {
             crate::features::extraction::service::extract_best_effort(state, *id).await;
         }
@@ -179,6 +190,12 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
         tracing::error!(error = %e, feed = %feed.url, "rule application failed");
     }
     Ok(())
+}
+
+/// クロール時の全文自動抽出を行うか。グローバル設定(EXTRACT_ON_CRAWL)と
+/// フィード個別設定(feeds.extract_full_content)の OR。
+fn auto_extract_enabled(global: bool, per_feed: bool) -> bool {
+    global || per_feed
 }
 
 /// entry の links から記事本体の URL を選ぶ。
@@ -196,8 +213,18 @@ fn entry_url(links: &[feed_rs::model::Link]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::entry_url;
+    use super::{auto_extract_enabled, entry_url};
     use feed_rs::parser;
+
+    /// クロール時の全文自動抽出は、グローバル設定(EXTRACT_ON_CRAWL)か
+    /// フィード個別設定(feeds.extract_full_content)のどちらかが有効なら行う。
+    #[test]
+    fn auto_extract_enabled_is_global_or_per_feed() {
+        assert!(!auto_extract_enabled(false, false));
+        assert!(auto_extract_enabled(true, false)); // グローバル一括
+        assert!(auto_extract_enabled(false, true)); // フィード個別
+        assert!(auto_extract_enabled(true, true));
+    }
 
     /// create_feed は初回フェッチの完了を待たずに応答すること（遅いフィードでも
     /// POST /api/feeds が即返る）。実 DB が必要なので ignored。実行方法:

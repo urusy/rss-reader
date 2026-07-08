@@ -66,6 +66,7 @@ pub async fn import_opml(state: &AppState, xml: &str) -> AppResult<ImportSummary
                     None,
                     Some(Some(fid)),
                     None,
+                    None,
                 )
                 .await?;
             }

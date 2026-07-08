@@ -47,6 +47,9 @@ pub struct UpdateFeed {
     // 通知優先度 (#31): 0=通常 / 1=高。キー無し=据え置き。
     #[serde(default)]
     pub priority: Option<i16>,
+    // クロール時の全文自動抽出。キー無し=据え置き。
+    #[serde(default)]
+    pub extract_full_content: Option<bool>,
 }
 
 // "キー無し" と "null" を区別するためのヘルパ（serde_with の double_option 相当）。
@@ -66,8 +69,15 @@ pub async fn update(
     Json(body): Json<UpdateFeed>,
 ) -> AppResult<Json<Feed>> {
     let folder_id = body.folder_id.map(|inner| inner.map(FolderId));
-    let feed =
-        service::update_feed(&state, FeedId(id), body.title, folder_id, body.priority).await?;
+    let feed = service::update_feed(
+        &state,
+        FeedId(id),
+        body.title,
+        folder_id,
+        body.priority,
+        body.extract_full_content,
+    )
+    .await?;
     Ok(Json(feed))
 }
 
@@ -92,5 +102,17 @@ mod tests {
         let id = "00000000-0000-0000-0000-0000000000aa";
         let u: UpdateFeed = serde_json::from_str(&format!(r#"{{"folder_id":"{id}"}}"#)).unwrap();
         assert_eq!(u.folder_id, Some(Some(Uuid::parse_str(id).unwrap())));
+    }
+
+    #[test]
+    fn update_feed_omitted_extract_full_content_is_none() {
+        let u: UpdateFeed = serde_json::from_str(r#"{"title":"x"}"#).unwrap();
+        assert_eq!(u.extract_full_content, None);
+    }
+
+    #[test]
+    fn update_feed_value_extract_full_content_is_some() {
+        let u: UpdateFeed = serde_json::from_str(r#"{"extract_full_content":true}"#).unwrap();
+        assert_eq!(u.extract_full_content, Some(true));
     }
 }

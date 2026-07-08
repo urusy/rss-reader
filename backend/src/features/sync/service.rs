@@ -454,6 +454,7 @@ pub async fn subscription_edit(state: &AppState, params: &wire::Params) -> AppRe
                         title.clone(),
                         folder,
                         None,
+                        None,
                     )
                     .await
                     {
@@ -476,6 +477,7 @@ pub async fn subscription_edit(state: &AppState, params: &wire::Params) -> AppRe
                                 FeedId(id),
                                 None,
                                 Some(Some(folder)),
+                                None,
                                 None,
                             )
                             .await

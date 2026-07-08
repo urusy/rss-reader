@@ -47,6 +47,8 @@ export interface Feed {
   last_fetched_at: string | null;
   // 通知優先度 (#31): 0=通常 / 1=高。高のフィードの新着のみ Web Push 通知。
   priority: number;
+  // クロール時に全文を自動抽出する（ヘッドラインのみのフィード向け）。
+  extract_full_content: boolean;
 }
 
 export interface Folder {
@@ -428,13 +430,24 @@ export const api = {
    */
   updateFeed: (
     id: string,
-    patch: { title?: string; folder_id?: string | null; priority?: number },
+    patch: {
+      title?: string;
+      folder_id?: string | null;
+      priority?: number;
+      extract_full_content?: boolean;
+    },
   ) => http<Feed>(`/api/feeds/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   // 通知優先度の更新 (#31): 0=通常 / 1=高。
   setFeedPriority: (id: string, priority: number) =>
     http<Feed>(`/api/feeds/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ priority }),
+    }),
+  // クロール時の全文自動抽出の切替（ヘッドラインのみのフィード向け）。
+  setFeedExtractFullContent: (id: string, extract_full_content: boolean) =>
+    http<Feed>(`/api/feeds/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ extract_full_content }),
     }),
   // 当該フィードのみ再取得し、更新後 Feed を返す。
   refreshFeed: (id: string) =>

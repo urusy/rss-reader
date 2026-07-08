@@ -118,6 +118,16 @@ export default function FeedManage() {
     }
   };
 
+  // クロール時の全文自動抽出をトグル（ヘッドラインのみのフィード向け）。
+  const toggleExtract = async (feed: Feed) => {
+    try {
+      await api.setFeedExtractFullContent(feed.id, !feed.extract_full_content);
+      app.refetchFeeds();
+    } catch (e) {
+      alert(`全文自動取得の変更に失敗: ${String(e)}`);
+    }
+  };
+
   const deleteFeed = async (feed: Feed) => {
     if (!confirm(`フィード「${feed.title ?? feed.url}」を削除しますか？`)) return;
     try {
@@ -239,6 +249,14 @@ export default function FeedManage() {
                           onClick={() => togglePriority(feed)}
                         >
                           {feed.priority >= 1 ? "通知 高" : "通知 通常"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={feed.extract_full_content ? "default" : "ghost"}
+                          title="新着の取込み時に元記事から全文を自動取得する（本文が入っていないフィード向け）"
+                          onClick={() => toggleExtract(feed)}
+                        >
+                          {feed.extract_full_content ? "全文 自動" : "全文 手動"}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => renameFeed(feed)}>
                           改名

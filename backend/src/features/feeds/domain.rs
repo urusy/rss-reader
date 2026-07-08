@@ -40,6 +40,9 @@ pub struct Feed {
     /// 通知優先度 (#31): 0=通常 / 1=高。高のフィードの新着のみ Web Push で通知する。
     #[serde(default)]
     pub priority: i16,
+    /// クロール時に全文を自動抽出する（ヘッドラインのみのフィード向け）。
+    #[serde(default)]
+    pub extract_full_content: bool,
 }
 
 #[cfg(test)]
