@@ -42,11 +42,11 @@ pub struct AppConfig {
     pub digest_hour_utc: u32,
     /// Output language for the digest. Default "ja".
     pub digest_lang: String,
-    /// Optional SMTP for digest email (sent only when host/from/to all set).
-    pub smtp_host: Option<String>,
-    pub smtp_port: u16,
-    pub smtp_username: Option<String>,
-    pub smtp_password: Option<String>,
+    /// ダイジェストのメール配信は Resend の HTTP API を使う（SMTP は不採用）。
+    /// key/from/to が揃ったときだけ送信する（`features/digest/email.rs`）。
+    pub resend_api_key: Option<String>,
+    /// Resend API のベース URL。既定 `https://api.resend.com`（テストで差し替える）。
+    pub resend_base_url: String,
     pub digest_email_from: Option<String>,
     pub digest_email_to: Option<String>,
     /// Semantic clustering (#26): enable the scheduled re-clustering loop.
@@ -150,17 +150,13 @@ impl AppConfig {
             .filter(|h| *h <= 23)
             .unwrap_or(21);
         let digest_lang = std::env::var("DIGEST_LANG").unwrap_or_else(|_| "ja".to_string());
-        let smtp_host = std::env::var("SMTP_HOST").ok().filter(|v| !v.is_empty());
-        let smtp_port = std::env::var("SMTP_PORT")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(587);
-        let smtp_username = std::env::var("SMTP_USERNAME")
+        let resend_api_key = std::env::var("RESEND_API_KEY")
             .ok()
             .filter(|v| !v.is_empty());
-        let smtp_password = std::env::var("SMTP_PASSWORD")
+        let resend_base_url = std::env::var("RESEND_BASE_URL")
             .ok()
-            .filter(|v| !v.is_empty());
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| "https://api.resend.com".to_string());
         let digest_email_from = std::env::var("DIGEST_EMAIL_FROM")
             .ok()
             .filter(|v| !v.is_empty());
@@ -235,10 +231,8 @@ impl AppConfig {
             digest_enabled,
             digest_hour_utc,
             digest_lang,
-            smtp_host,
-            smtp_port,
-            smtp_username,
-            smtp_password,
+            resend_api_key,
+            resend_base_url,
             digest_email_from,
             digest_email_to,
             clustering_enabled,
@@ -278,10 +272,8 @@ impl AppConfig {
             digest_enabled: false,
             digest_hour_utc: 21,
             digest_lang: "ja".to_string(),
-            smtp_host: None,
-            smtp_port: 587,
-            smtp_username: None,
-            smtp_password: None,
+            resend_api_key: None,
+            resend_base_url: "https://api.resend.com".to_string(),
             digest_email_from: None,
             digest_email_to: None,
             clustering_enabled: false,
