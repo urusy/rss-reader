@@ -56,7 +56,9 @@ export function pickBestJaVoice(
   const score = (v: SpeechSynthesisVoice): number => {
     const n = `${v.name} ${v.voiceURI}`.toLowerCase();
     let s = 0;
-    if (/natural|neural|enhanced|premium/.test(n)) s += 100; // ニューラル/高品質声
+    // ニューラル/高品質声。iOS の日本語ロケールでは表示名が「（拡張）」等に
+    // 訳されることがあるため日本語ラベルも見る（voiceURI は英語識別子のまま）。
+    if (/natural|neural|enhanced|premium|拡張|プレミアム/.test(n)) s += 100;
     if (v.localService === false) s += 40; // オンライン/ネットワーク声は概して高品質
     if (/nanami|keita|hattori|ayumi|ichiro/.test(n)) s += 20; // 既知の良質声
     if (/google/.test(n)) s += 15; // Chrome/Android の Google 日本語
@@ -66,21 +68,31 @@ export function pickBestJaVoice(
   return ja.reduce((best, v) => (score(v) > score(best) ? v : best), ja[0]);
 }
 
-/** 利用可能なボイス一覧。getVoices は非同期に埋まるため voiceschanged も待つ。 */
-export function loadVoices(): Promise<SpeechSynthesisVoice[]> {
-  if (!ttsSupported()) return Promise.resolve([]);
+/**
+ * voices の変化を購読する。iOS Safari は getVoices() が遅れて（ときに
+ * ユーザー操作の後で）埋まるため、一度きりの取得＋短いフォールバックでは
+ * 空のまま固まり、声の選択肢も pickBestJaVoice も効かなくなる。
+ * 即時に現在値を届け、以後 voiceschanged のたびに再通知する。戻り値は解除関数。
+ */
+export function watchVoices(
+  cb: (voices: SpeechSynthesisVoice[]) => void,
+): () => void {
+  if (!ttsSupported()) {
+    cb([]);
+    return () => {};
+  }
   const synth = window.speechSynthesis;
-  const now = synth.getVoices();
-  if (now.length > 0) return Promise.resolve(now);
-  return new Promise((resolve) => {
-    const handler = () => {
-      synth.removeEventListener("voiceschanged", handler);
-      resolve(synth.getVoices());
-    };
-    synth.addEventListener("voiceschanged", handler);
-    // 念のためのフォールバック（イベントが来ない実装向け）。
-    setTimeout(() => resolve(synth.getVoices()), 500);
-  });
+  const push = () => cb(synth.getVoices());
+  push();
+  // Safari は歴史的に speechSynthesis への addEventListener が機能せず、
+  // onvoiceschanged プロパティ代入だけがイベントを受け取れた。両方に登録する
+  // （両方発火しても同じ一覧を再通知するだけで無害）。
+  synth.addEventListener("voiceschanged", push);
+  synth.onvoiceschanged = push;
+  return () => {
+    synth.removeEventListener("voiceschanged", push);
+    if (synth.onvoiceschanged === push) synth.onvoiceschanged = null;
+  };
 }
 
 export interface TtsController {

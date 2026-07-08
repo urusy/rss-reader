@@ -281,6 +281,30 @@ describe("ListenBar", () => {
     expect(synth.spoken[0].text).toBe(chunksOf(body)[0]);
   });
 
+  it("バックグラウンド遷移で自動的に一時停止する（iOS の発話停止/シンセ破壊対策）", async () => {
+    render(() => (
+      <ListenBar articleId="a1" sources={() => [body]} onListened={vi.fn()} />
+    ));
+    fireEvent.click(screen.getByText("▶ 読み上げ"));
+    await waitFor(() => screen.getByText("⏸ 一時停止")); // playing に入った
+
+    const cancels = synth.cancelCount;
+    Object.defineProperty(document, "hidden", {
+      value: true,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    // paused へ落ち（▶ 再開 が出る）、cancel で即無音になっている。
+    await waitFor(() => screen.getByText("▶ 再開"));
+    expect(synth.cancelCount).toBeGreaterThan(cancels);
+
+    Object.defineProperty(document, "hidden", {
+      value: false,
+      configurable: true,
+    });
+  });
+
   it("時間表示: 再生前から「経過 / 約全体（文字数÷読速の初期推定）」を出す", () => {
     // body は "B one. B two." の13文字 → 13/7 ≒ 1.86秒 → 四捨五入で 0:02。
     render(() => (

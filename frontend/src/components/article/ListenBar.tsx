@@ -8,7 +8,7 @@ import {
 } from "solid-js";
 import {
   createTtsController,
-  loadVoices,
+  watchVoices,
   pickBestJaVoice,
   ttsSupported,
   type TtsController,
@@ -109,7 +109,19 @@ export default function ListenBar(props: {
   };
 
   onMount(() => {
-    void loadVoices().then(setVoices);
+    // iOS Safari は getVoices() が遅延充填されるため、一度きりの取得では空のまま
+    // 固まる。watchVoices で即時値＋voiceschanged 後着を購読し続ける。
+    onCleanup(watchVoices(setVoices));
+
+    // バックグラウンド遷移で自動一時停止（iOS はタブ非表示で発話が停止/シンセが
+    // 壊れ、再開・進捗・既読化が破綻するため、明示的に paused へ畳んでおく）。
+    const onVisibility = () => {
+      if (document.hidden && state() === "playing") controller?.pause();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    onCleanup(() =>
+      document.removeEventListener("visibilitychange", onVisibility),
+    );
   });
 
   // 声が明示選択されていればそれを、未選択（"" ＝おまかせ）なら環境で最良の
