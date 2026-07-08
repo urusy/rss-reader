@@ -49,6 +49,9 @@ async fn main() -> anyhow::Result<()> {
         login_limiter: Arc::new(std::sync::Mutex::new(shared::auth::LoginLimiter::default())),
     };
 
+    // 機能利用イベントの writer（sink 受信側）と日次パージ。
+    features::usage::service::install(state.db.clone());
+    features::usage::service::spawn_purge(state.db.clone(), state.config.usage_retention_days);
     // Background feed-refresh loop. Swappable for apalis later (see CLAUDE.md).
     scheduler::spawn(state.clone());
     // Optional scheduled pg_dump (no-op unless BACKUP_DIR + interval are set).

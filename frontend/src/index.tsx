@@ -11,6 +11,7 @@ import FeedManage from "./routes/FeedManage";
 import Digest from "./routes/Digest";
 import Clusters from "./routes/Clusters";
 import Rules from "./routes/Rules";
+import Usage from "./routes/Usage";
 import NotFound from "./routes/NotFound";
 import { initTheme } from "./lib/theme";
 import { initTtsDict } from "./lib/tts-dict-store";
@@ -36,6 +37,7 @@ render(
       <Route path="/digest" component={Digest} />
       <Route path="/clusters" component={Clusters} />
       <Route path="/rules" component={Rules} />
+      <Route path="/usage" component={Usage} />
       <Route path="/settings" component={Settings} />
       <Route path="*" component={NotFound} />
     </Router>

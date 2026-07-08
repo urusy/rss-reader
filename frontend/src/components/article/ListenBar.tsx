@@ -23,6 +23,7 @@ import {
   clearTtsPos,
 } from "@/lib/tts-progress";
 import { estimateTotalSecs, formatClock } from "@/lib/tts-time";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 const RATE_KEY = "tts-rate";
@@ -177,6 +178,9 @@ export default function ListenBar(props: {
     controller = build();
     resetTimeSession(); // 時間較正はセッション（play〜stop）単位で測り直す
     controller.play(start);
+    // 利用状況の記録（読み上げ対象の内訳つき）。テレメトリなので失敗は握りつぶす。
+    const src = current().key === "body" ? "content" : current().key;
+    api.recordUsage("tts_play", { source: src }).catch(() => {});
   };
 
   // ソース切替: idle に戻して再生ボタン待ち（位置が変わる別テキストなので auto-play しない）。

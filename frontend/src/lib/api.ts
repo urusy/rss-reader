@@ -331,6 +331,37 @@ export interface ReadLaterItem {
   updated_at: string;
 }
 
+// --- 利用状況の記録・可視化 ---
+
+/** 期間×機能の時系列1点（GET /api/usage/summary の buckets 要素）。 */
+export interface UsageBucket {
+  /** バケット先頭の時刻（ISO 8601、date_trunc の結果） */
+  bucket: string;
+  feature: string;
+  count: number;
+}
+
+/** LLM 実呼び出しの purpose×model 集計行。キャッシュヒットは含まれない。 */
+export interface LlmUsageRow {
+  purpose: string;
+  model: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+/** tts_play の読み上げ対象内訳（meta.source 別）。 */
+export interface TtsSourceRow {
+  source: string;
+  count: number;
+}
+
+export interface UsageSummary {
+  buckets: UsageBucket[];
+  llm: LlmUsageRow[];
+  tts_sources: TtsSourceRow[];
+}
+
 // http<T> は Error(`${status} ${statusText}: ${body}`) を投げる。先頭の status を取り出す。
 export function errorStatus(e: unknown): number | null {
   const msg = e instanceof Error ? e.message : String(e);
@@ -714,4 +745,21 @@ export const api = {
   listSessions: () => http<SessionInfo[]>("/api/auth/sessions"),
   revokeSession: (id: string) =>
     http<void>(`/api/auth/sessions/${id}`, { method: "DELETE" }),
+
+  // --- 利用状況の記録・可視化 ---
+  // 期間×機能の時系列 + LLM 消費 + 読み上げ内訳を一括取得。
+  getUsageSummary: (days: number, bucket: string) =>
+    http<UsageSummary>(
+      `/api/usage/summary?days=${days}&bucket=${encodeURIComponent(bucket)}`,
+    ),
+  // クライアント側で完結する機能（読み上げ等）の利用申告。テレメトリなので
+  // fire-and-forget（keepalive でページ遷移中でも取りこぼしにくく）。204 応答。
+  recordUsage: (feature: string, meta?: Record<string, unknown>) =>
+    fetch("/api/usage/events", {
+      method: "POST",
+      credentials: "same-origin",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feature, meta }),
+    }).then(() => undefined),
 };

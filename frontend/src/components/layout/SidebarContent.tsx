@@ -45,6 +45,9 @@ export default function SidebarContent(props: { onNavigate?: () => void }) {
           <A href="/rules" class={navItem} activeClass={navActive} onClick={go}>
             自動ルール
           </A>
+          <A href="/usage" class={navItem} activeClass={navActive} onClick={go}>
+            利用状況
+          </A>
           <A href="/settings" class={navItem} activeClass={navActive} onClick={go}>
             設定
           </A>

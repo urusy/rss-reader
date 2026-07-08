@@ -23,6 +23,7 @@ pub mod saved_views;
 pub mod search;
 pub mod stats;
 pub mod tags;
+pub mod usage;
 
 use axum::http::{header, HeaderValue, Method};
 use axum::{middleware, Router};
@@ -70,6 +71,10 @@ pub fn router(state: AppState) -> Router {
         .merge(clustering::routes())
         .merge(automation_rules::routes())
         .merge(backup::routes())
+        .merge(usage::routes())
+        // 利用記録は require_auth の内側（コード上は先 = 実行順は認証の後）。
+        // 未認証 401 は記録されない。
+        .layer(middleware::from_fn(usage::track_usage))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let cors = cors_layer(&state.config);

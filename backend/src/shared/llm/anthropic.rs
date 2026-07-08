@@ -32,17 +32,22 @@ impl AnthropicClient {
         }
     }
 
-    async fn complete(&self, system: &str, user: &str) -> AppResult<String> {
+    async fn complete(&self, purpose: &'static str, system: &str, user: &str) -> AppResult<String> {
         let msgs = [ChatMessage {
             role: "user".into(),
             content: user.to_string(),
         }];
-        self.complete_messages(system, &msgs, 1024).await
+        self.complete_messages(purpose, system, &msgs, 1024).await
     }
 
     /// Multi-turn completion. `complete` delegates here with a single user turn.
+    ///
+    /// `purpose` は利用状況記録（llm_usage_events）用のラベル。全 trait メソッドが
+    /// ここに合流するため、この1箇所で実呼び出しの model + トークン数を捕捉できる
+    /// （scheduler 起動の背景 digest/relevance/clustering も漏れない）。
     async fn complete_messages(
         &self,
+        purpose: &'static str,
         system: &str,
         messages: &[ChatMessage],
         max_tokens: u32,
@@ -91,6 +96,23 @@ impl AnthropicClient {
             .and_then(|t| t.as_str())
             .ok_or_else(|| AppError::Upstream("unexpected anthropic response shape".into()))?;
 
+        // 成功した実呼び出しだけ記録（キャッシュヒットはここに来ない）。
+        // record は非ブロッキング・失敗巻き込みなし（sink 未 install なら no-op）。
+        let input_tokens = value
+            .pointer("/usage/input_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let output_tokens = value
+            .pointer("/usage/output_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        crate::shared::usage::record(crate::shared::usage::UsageEvent::Llm {
+            purpose,
+            model: self.model.clone(),
+            input_tokens,
+            output_tokens,
+        });
+
         Ok(text.to_string())
     }
 }
@@ -104,7 +126,7 @@ impl LlmClient for AnthropicClient {
             .unwrap_or(super::DEFAULT_SUMMARIZE_PROMPT);
         let system = tmpl.replace("{lang}", &req.target_lang);
         let user = format!("Title: {}\n\n{}", req.title, req.content);
-        self.complete(&system, &user).await
+        self.complete("summarize", &system, &user).await
     }
 
     async fn translate(&self, req: TranslateRequest) -> AppResult<String> {
@@ -113,12 +135,12 @@ impl LlmClient for AnthropicClient {
             .as_deref()
             .unwrap_or(super::DEFAULT_TRANSLATE_PROMPT);
         let system = tmpl.replace("{lang}", &req.target_lang);
-        self.complete(&system, &req.content).await
+        self.complete("translate", &system, &req.content).await
     }
 
     async fn chat(&self, req: ChatRequest) -> AppResult<String> {
         let max = req.max_tokens.unwrap_or(CHAT_MAX_TOKENS);
-        self.complete_messages(&req.system, &req.messages, max)
+        self.complete_messages("chat", &req.system, &req.messages, max)
             .await
     }
 
@@ -141,7 +163,7 @@ impl LlmClient for AnthropicClient {
             max = req.max_tags,
         );
         let user = format!("Title: {}\n\n{}", req.title, req.content);
-        self.complete(&system, &user).await
+        self.complete("suggest_tags", &system, &user).await
     }
 
     async fn digest(&self, req: DigestRequest) -> AppResult<String> {
@@ -152,7 +174,7 @@ impl LlmClient for AnthropicClient {
              points. Keep each article's source link. Output Markdown only.",
             req.target_lang
         );
-        self.complete(&system, &req.items).await
+        self.complete("digest", &system, &req.items).await
     }
 
     async fn score_relevance(&self, req: ScoreRelevanceRequest) -> AppResult<String> {
@@ -186,7 +208,7 @@ impl LlmClient for AnthropicClient {
             })
             .collect::<Vec<_>>()
             .join("\n---\n");
-        self.complete(&system, &user).await
+        self.complete("score_relevance", &system, &user).await
     }
 
     async fn cluster_summary(&self, req: ClusterSummaryRequest) -> AppResult<String> {
@@ -198,6 +220,6 @@ impl LlmClient for AnthropicClient {
              naming each outlet). Be concise and neutral. Output only the summary.",
             req.target_lang
         );
-        self.complete(&system, &req.items).await
+        self.complete("cluster_summary", &system, &req.items).await
     }
 }

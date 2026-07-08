@@ -63,6 +63,9 @@ pub struct AppConfig {
     /// Private key = base64url raw P-256 scalar (used to sign VAPID JWTs).
     pub vapid_public_key: Option<String>,
     pub vapid_private_key: Option<String>,
+    /// 利用状況イベント（usage_events / llm_usage_events）の保持日数。
+    /// 0 = パージ無効（無期限保持）。既定 365。
+    pub usage_retention_days: i64,
 }
 
 impl AppConfig {
@@ -200,6 +203,12 @@ impl AppConfig {
             .ok()
             .filter(|v| !v.is_empty());
 
+        let usage_retention_days = std::env::var("USAGE_RETENTION_DAYS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|d| *d >= 0)
+            .unwrap_or(365);
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -234,6 +243,7 @@ impl AppConfig {
             cluster_summary_lang,
             vapid_public_key,
             vapid_private_key,
+            usage_retention_days,
         })
     }
 
@@ -275,6 +285,7 @@ impl AppConfig {
             cluster_summary_lang: "ja".to_string(),
             vapid_public_key: None,
             vapid_private_key: None,
+            usage_retention_days: 365,
         }
     }
 }
