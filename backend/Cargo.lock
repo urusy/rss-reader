@@ -2365,6 +2365,7 @@ dependencies = [
  "dotenvy",
  "ego-tree",
  "feed-rs",
+ "form_urlencoded",
  "quick-xml 0.41.0",
  "reqwest",
  "scraper",

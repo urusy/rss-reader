@@ -192,7 +192,9 @@ async fn hash_password(password: Password) -> AppResult<String> {
 }
 
 /// PHC 文字列に対する検証。パラメータはハッシュ側の記録値が使われる。
-async fn verify_password(password: Password, phc: String) -> AppResult<bool> {
+/// pub(crate): sync スライス（GReader ClientLogin）が同一パラメータで検証する
+/// ため公開する（複製はパラメータ乖離バグの温床 — docs/design/29-sync-api.md §5.9）。
+pub(crate) async fn verify_password(password: Password, phc: String) -> AppResult<bool> {
     let ok = tokio::task::spawn_blocking(move || {
         let parsed = PasswordHash::new(&phc)
             .map_err(|e| anyhow::anyhow!("stored password hash is invalid: {e}"))?;

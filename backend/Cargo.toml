@@ -66,6 +66,9 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 time = "0.3"
 # VAPID 鍵・購読鍵の base64url(no pad) デコード用（web-push-native と同じ実装）。
 base64ct = { version = "1", features = ["alloc"] }
+# GReader 互換 API (#29): i=..&i=.. の反復キー form を保持したままパースする。
+# axum::extract::Form / serde_urlencoded は last-wins で潰すため使えない。
+form_urlencoded = "1"
 
 [profile.release]
 opt-level = 3

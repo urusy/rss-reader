@@ -22,6 +22,7 @@ pub mod relevance;
 pub mod saved_views;
 pub mod search;
 pub mod stats;
+pub mod sync;
 pub mod tags;
 pub mod usage;
 
@@ -44,7 +45,14 @@ use crate::shared::state::AppState;
 /// valid session cookie — until the initial password setup completes, every
 /// protected route answers 401 (secure by default).
 pub fn router(state: AppState) -> Router {
-    let public = Router::new().merge(health::routes()).merge(auth::routes());
+    let mut public = Router::new().merge(health::routes()).merge(auth::routes());
+    // GReader 互換同期 API (#29) の公開面（/accounts/ClientLogin・/reader/api/0/*）は
+    // SYNC_API_ENABLED=true のときだけ載せる。無効時はルート自体が存在せず、未知パス
+    // と同じ 401 に落ちる（存在を隠す）。認証は sync 内部の require_sync_auth が担うため
+    // public 側（require_auth の外）に置く。
+    if state.config.sync_api_enabled {
+        public = public.merge(sync::routes(&state));
+    }
 
     let protected = Router::new()
         .merge(auth::protected_routes())
@@ -72,6 +80,9 @@ pub fn router(state: AppState) -> Router {
         .merge(automation_rules::routes())
         .merge(backup::routes())
         .merge(usage::routes())
+        // 同期トークン管理面（/api/sync/tokens）は Cookie セッション保護の通常 /api。
+        // GReader 公開面と違い SYNC_API_ENABLED に依存せず常設（無効でも空一覧を返す）。
+        .merge(sync::protected_routes())
         // 利用記録は require_auth の内側（コード上は先 = 実行順は認証の後）。
         // 未認証 401 は記録されない。
         .layer(middleware::from_fn(usage::track_usage))

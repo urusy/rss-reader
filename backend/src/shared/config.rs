@@ -66,6 +66,9 @@ pub struct AppConfig {
     /// 利用状況イベント（usage_events / llm_usage_events）の保持日数。
     /// 0 = パージ無効（無期限保持）。既定 365。
     pub usage_retention_days: i64,
+    /// GReader 互換同期 API (#29) を公開するか。無認証到達面を持つため既定 false
+    /// （opt-in）。false ならルート自体を merge しない（存在を隠す）。
+    pub sync_api_enabled: bool,
 }
 
 impl AppConfig {
@@ -209,6 +212,11 @@ impl AppConfig {
             .filter(|d| *d >= 0)
             .unwrap_or(365);
 
+        let sync_api_enabled = std::env::var("SYNC_API_ENABLED")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -244,6 +252,7 @@ impl AppConfig {
             vapid_public_key,
             vapid_private_key,
             usage_retention_days,
+            sync_api_enabled,
         })
     }
 
@@ -286,6 +295,7 @@ impl AppConfig {
             vapid_public_key: None,
             vapid_private_key: None,
             usage_retention_days: 365,
+            sync_api_enabled: false,
         }
     }
 }

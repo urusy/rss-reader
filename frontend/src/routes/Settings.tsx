@@ -11,6 +11,7 @@ import AccountSettingsCard from "@/components/settings/AccountSettingsCard";
 import LlmSettingsCard from "@/components/settings/LlmSettingsCard";
 import TtsDictCard from "@/components/settings/TtsDictCard";
 import PushSettingsCard from "@/components/settings/PushSettingsCard";
+import SyncClientsCard from "@/components/settings/SyncClientsCard";
 
 export default function Settings() {
   const [status, { refetch }] = createResource(() => api.getInstapaperStatus());
@@ -245,6 +246,8 @@ export default function Settings() {
       <TtsDictCard />
 
       <PushSettingsCard />
+
+      <SyncClientsCard />
 
       <Card>
         <CardHeader>

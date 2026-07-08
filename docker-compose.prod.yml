@@ -35,9 +35,23 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       BIND_ADDR: 0.0.0.0:8080
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
-      APP_AUTH_TOKEN: ${APP_AUTH_TOKEN:-}
+      # 認証はパスワードログイン（初回アクセス時に画面から設定・env 不要）。
+      # HTTPS 終端（Cloudflare Tunnel 等）がある構成では COOKIE_SECURE=true を推奨。
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+      FEED_REFRESH_INTERVAL_SECS: ${FEED_REFRESH_INTERVAL_SECS:-900}
+      ALLOW_PRIVATE_NETWORKS: ${ALLOW_PRIVATE_NETWORKS:-}
+      # Daily AI digest (#23) + メール配信（Resend HTTP API。key/from/to が揃ったときだけ送信）。
+      DIGEST_ENABLED: ${DIGEST_ENABLED:-}
+      DIGEST_HOUR_UTC: ${DIGEST_HOUR_UTC:-}
+      DIGEST_LANG: ${DIGEST_LANG:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DIGEST_EMAIL_FROM: ${DIGEST_EMAIL_FROM:-}
+      DIGEST_EMAIL_TO: ${DIGEST_EMAIL_TO:-}
+      CLUSTERING_ENABLED: ${CLUSTERING_ENABLED:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      # GReader 互換同期 API (#29)。無認証到達面を持つため既定 off（opt-in）。
+      SYNC_API_ENABLED: ${SYNC_API_ENABLED:-}
     depends_on:
       db:
         condition: service_healthy

@@ -362,6 +362,18 @@ export interface UsageSummary {
   tts_sources: TtsSourceRow[];
 }
 
+// --- 同期（Google Reader 互換 API・機能29） ---
+
+/** ClientLogin で発行された同期トークン（GET /api/sync/tokens の要素）。 */
+export interface SyncTokenInfo {
+  id: string;
+  /** クライアント申告のユーザー名（識別ラベル）。無指定なら null。 */
+  label: string | null;
+  created_at: string;
+  /** 最終利用時刻。一度も同期していなければ null。 */
+  last_used_at: string | null;
+}
+
 // http<T> は Error(`${status} ${statusText}: ${body}`) を投げる。先頭の status を取り出す。
 export function errorStatus(e: unknown): number | null {
   const msg = e instanceof Error ? e.message : String(e);
@@ -762,4 +774,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ feature, meta }),
     }).then(() => undefined),
+
+  // --- 同期（Google Reader 互換 API・機能29） ---
+  // ClientLogin で発行された同期トークンの一覧と失効（設定 →「同期クライアント」）。
+  listSyncTokens: () => http<SyncTokenInfo[]>("/api/sync/tokens"),
+  revokeSyncToken: (id: string) =>
+    http<void>(`/api/sync/tokens/${id}`, { method: "DELETE" }),
 };

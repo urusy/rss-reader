@@ -15,6 +15,9 @@ export default defineConfig({
       // Host を書き換えるとブラウザの Origin と食い違い、CSRF の Origin 検証
       // （POST 等で Origin と Host の一致を要求）が 403 を返してしまう。
       "/api": { target: "http://localhost:8080" },
+      // GReader 互換 API (#29)。dev でも NetNewsWire 等から :5173 経由で叩ける。
+      "/reader": { target: "http://localhost:8080" },
+      "/accounts": { target: "http://localhost:8080" },
     },
   },
 });

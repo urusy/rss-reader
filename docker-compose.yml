@@ -38,10 +38,14 @@ services:
       BACKUP_TOKEN: ${BACKUP_TOKEN:-}
       BACKUP_DIR: ${BACKUP_DIR:-}
       BACKUP_PGDUMP_INTERVAL_SECS: ${BACKUP_PGDUMP_INTERVAL_SECS:-}
-      # Daily AI digest (#23). Off unless DIGEST_ENABLED=true; SMTP optional.
+      # Daily AI digest (#23). Off unless DIGEST_ENABLED=true.
+      # メール配信は Resend HTTP API（key/from/to が揃ったときだけ送信）。
       DIGEST_ENABLED: ${DIGEST_ENABLED:-}
       DIGEST_HOUR_UTC: ${DIGEST_HOUR_UTC:-}
       DIGEST_LANG: ${DIGEST_LANG:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DIGEST_EMAIL_FROM: ${DIGEST_EMAIL_FROM:-}
+      DIGEST_EMAIL_TO: ${DIGEST_EMAIL_TO:-}
       # Semantic clustering (#26). Off unless CLUSTERING_ENABLED=true.
       CLUSTERING_ENABLED: ${CLUSTERING_ENABLED:-}
       CLUSTERING_INTERVAL_SECS: ${CLUSTERING_INTERVAL_SECS:-}
@@ -49,6 +53,8 @@ services:
       # Generate with scripts/gen-vapid.sh and put into .env. Never commit keys.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      # GReader 互換同期 API (#29)。無認証到達面を持つため既定 off（opt-in）。
+      SYNC_API_ENABLED: ${SYNC_API_ENABLED:-}
       RUST_LOG: ${RUST_LOG:-info,rss_reader_backend=debug}
     depends_on:
       db:

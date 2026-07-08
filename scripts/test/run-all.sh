@@ -32,6 +32,7 @@ scripts=(
   api-opml.sh
   api-mute-rules.sh
   api-backup.sh
+  api-greader.sh
   read-later.sh
   read-on-save.sh
   api-articles-read-all.sh
