@@ -7,11 +7,12 @@ import {
   Show,
 } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
-import { api, errorStatus } from "@/lib/api";
+import { api, errorStatus, type Article, type Feed } from "@/lib/api";
 import { useSelection } from "@/lib/selection";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import SourceLabel from "@/components/article/SourceLabel";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,23 @@ export default function ArticleList() {
     for (const s of app.relevanceScores() ?? []) m.set(s.article_id, s.score);
     return m;
   });
+
+  // --- ソース可視化 (#1): feed_id → フィード名を store から結合（追加フェッチ無し） ---
+  const feedById = createMemo(() => {
+    const m = new Map<string, Feed>();
+    for (const f of app.feeds() ?? []) m.set(f.id, f);
+    return m;
+  });
+  // フィード名 → 無ければ記事URLのホスト → 最終フォールバック。
+  const feedName = (a: Article): string => {
+    const t = feedById().get(a.feed_id)?.title;
+    if (t) return t;
+    try {
+      return new URL(a.url).host;
+    } catch {
+      return "(不明なソース)";
+    }
+  };
   const sorted = createMemo(() => {
     const list = articles() ?? [];
     if (app.state.sort !== "relevance") return list;
@@ -169,6 +187,9 @@ export default function ArticleList() {
                     selectedId() === a.id && "bg-accent",
                   )}
                 >
+                  <div class="mb-1">
+                    <SourceLabel name={feedName(a)} url={a.url} />
+                  </div>
                   <div class="flex items-start justify-between gap-2">
                     <p
                       class={cn(
