@@ -170,17 +170,9 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
         .collect();
     let stored = articles::repository::upsert_batch(&state.db, FeedId(feed.id.0), &items).await?;
 
-    // Optional crawl-time full-content extraction. Enabled globally
-    // (EXTRACT_ON_CRAWL=true) or per feed (feeds.extract_full_content —
-    // ヘッドラインのみのフィード向け)。Best-effort + idempotent (skips
-    // already-extracted rows). Default off, so behavior is unchanged
-    // unless explicitly opted in.
-    if auto_extract_enabled(state.config.extract_on_crawl, feed.extract_full_content) {
-        for (id, _url) in &stored {
-            crate::features::extraction::service::extract_best_effort(state, *id).await;
-        }
-    }
-
+    // タイトル確定と #28 ルール適用は抽出より先に済ませる。抽出は記事ごとの
+    // 直列 HTTP 取得で数分かかりうるため、後ろに置くと登録直後のフィードが
+    // タイトル無しのまま見える（ルールも feed 由来の content にしか依存しない）。
     repository::touch_fetched(&state.db, feed.id, feed_title.as_deref()).await?;
     // #28: apply automation rules to the freshly ingested articles (best-effort;
     // a failure here must not fail the crawl).
@@ -189,13 +181,39 @@ async fn fetch_and_store_inner(state: &AppState, feed: &Feed) -> AppResult<()> {
     {
         tracing::error!(error = %e, feed = %feed.url, "rule application failed");
     }
+
+    // Crawl-time full-content extraction (best-effort + idempotent: skips
+    // already-extracted rows). 最も遅い処理なので必ず最後。
+    //   - 全記事: グローバル(EXTRACT_ON_CRAWL) or フィード個別(extract_full_content)
+    //   - 本文がない記事のみ: 常時（ヘッドラインのみのフィード対策。設定不要）
+    let extract_all =
+        auto_extract_enabled(state.config.extract_on_crawl, feed.extract_full_content);
+    let thin_urls: std::collections::HashSet<&str> = items
+        .iter()
+        .filter(|i| content_is_thin(&i.content, state.config.extract_min_chars))
+        .map(|i| i.url.as_str())
+        .collect();
+    for (id, url) in &stored {
+        if extract_all || thin_urls.contains(url.as_str()) {
+            crate::features::extraction::service::extract_best_effort(state, *id).await;
+        }
+    }
     Ok(())
 }
 
-/// クロール時の全文自動抽出を行うか。グローバル設定(EXTRACT_ON_CRAWL)と
-/// フィード個別設定(feeds.extract_full_content)の OR。
+/// クロール時の全文自動抽出を「フィード全記事」に対して行うか。
+/// グローバル設定(EXTRACT_ON_CRAWL)とフィード個別設定(feeds.extract_full_content)の OR。
+/// これが false でも、本文がない記事（`content_is_thin`）は個別に自動抽出される。
 fn auto_extract_enabled(global: bool, per_feed: bool) -> bool {
     global || per_feed
+}
+
+/// 「本文がない」判定。content の平文長（タグを除いた文字数）が min_chars
+/// （EXTRACT_MIN_CHARS、抽出結果を意味のある本文とみなす既存しきい値）未満なら
+/// thin。ヘッドラインのみのフィード（description がタイトルの丸写し）が典型で、
+/// この場合は設定なしでもクロール時に全文を自動抽出する。
+fn content_is_thin(content_html: &str, min_chars: usize) -> bool {
+    crate::features::extraction::domain::plain_text_len(content_html) < min_chars
 }
 
 /// entry の links から記事本体の URL を選ぶ。
@@ -213,7 +231,7 @@ fn entry_url(links: &[feed_rs::model::Link]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{auto_extract_enabled, entry_url};
+    use super::{auto_extract_enabled, content_is_thin, entry_url};
     use feed_rs::parser;
 
     /// クロール時の全文自動抽出は、グローバル設定(EXTRACT_ON_CRAWL)か
@@ -224,6 +242,27 @@ mod tests {
         assert!(auto_extract_enabled(true, false)); // グローバル一括
         assert!(auto_extract_enabled(false, true)); // フィード個別
         assert!(auto_extract_enabled(true, true));
+    }
+
+    /// 「本文がない」判定: content の平文長が min_chars 未満なら thin。
+    /// ヘッドラインのみのフィード（description がタイトルの丸写し）はここに
+    /// 落ち、設定なしでもクロール時に自動抽出される。
+    #[test]
+    fn content_is_thin_detects_headline_only_entries() {
+        // 空・タイトル丸写し程度 → thin
+        assert!(content_is_thin("", 200));
+        assert!(content_is_thin(
+            "Claude Cowork is coming to mobile and web",
+            200
+        ));
+        // HTML タグは数えない（タグで水増しされた空要素も thin）
+        assert!(content_is_thin("<p></p><div><span></span></div>", 200));
+        // 十分な長さの本文 → thin ではない
+        let body = format!("<p>{}</p>", "あ".repeat(300));
+        assert!(!content_is_thin(&body, 200));
+        // 境界: ちょうど min_chars は thin ではない
+        assert!(!content_is_thin(&"x".repeat(200), 200));
+        assert!(content_is_thin(&"x".repeat(199), 200));
     }
 
     /// create_feed は初回フェッチの完了を待たずに応答すること（遅いフィードでも
@@ -314,6 +353,110 @@ mod tests {
         assert!(
             elapsed < FETCH_DELAY,
             "create_feed blocked on the initial fetch: {elapsed:?}"
+        );
+    }
+
+    /// フィードタイトルの確定（touch_fetched）は本文なし記事の自動全文抽出より
+    /// 先に行われること。抽出は記事ごとの直列 HTTP 取得で数分かかりうるため、
+    /// 後回しにしないと登録直後のフィードがタイトル無しのまま見える。
+    /// 実 DB が必要なので ignored。実行方法:
+    ///   DATABASE_URL=... cargo test feed_title_is_set -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn feed_title_is_set_before_auto_extraction_completes() {
+        use crate::shared::config::AppConfig;
+        use crate::shared::state::AppState;
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        let db = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").expect("DATABASE_URL"))
+            .await
+            .expect("connect");
+        let mut config = AppConfig::for_test();
+        config.allow_private_networks = true; // ローカルテストサーバーを SSRF ガードに通す
+        let state = AppState {
+            db: db.clone(),
+            config: Arc::new(config),
+            http: reqwest::Client::new(),
+            http_external: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap(),
+            login_limiter: Arc::new(std::sync::Mutex::new(
+                crate::shared::auth::LoginLimiter::default(),
+            )),
+        };
+
+        // ヘッドラインのみのフィード（即応答）＋ 3秒かかる記事ページ。
+        // description がタイトル丸写し → thin 判定 → クロール時自動抽出が走る。
+        const EXTRACT_DELAY: Duration = Duration::from_secs(3);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let rss = format!(
+            r#"<?xml version="1.0"?>
+            <rss version="2.0"><channel><title>title-before-extract</title>
+              <item><title>slow post</title><link>http://{addr}/article.html</link>
+                <description>slow post</description></item>
+            </channel></rss>"#
+        );
+        let article = format!("<article><p>{}</p></article>", "real body ".repeat(100));
+        let app = axum::Router::new()
+            .route(
+                "/feed",
+                axum::routing::get(move || {
+                    let rss = rss.clone();
+                    async move { rss }
+                }),
+            )
+            .route(
+                "/article.html",
+                axum::routing::get(move || {
+                    let article = article.clone();
+                    async move {
+                        tokio::time::sleep(EXTRACT_DELAY).await;
+                        axum::response::Html(article)
+                    }
+                }),
+            );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let feed = super::repository::insert(&db, &format!("http://{addr}/feed"))
+            .await
+            .expect("insert feed");
+        let feed_id = feed.id;
+        let crawl_state = state.clone();
+        let crawl = tokio::spawn(async move { super::fetch_and_store(&crawl_state, &feed).await });
+
+        // 抽出（3秒）が終わるより十分前に、タイトルが確定していること
+        let mut title: Option<String> = None;
+        for _ in 0..15 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let (t,): (Option<String>,) = sqlx::query_as("SELECT title FROM feeds WHERE id = $1")
+                .bind(feed_id.0)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+            if t.is_some() {
+                title = t;
+                break;
+            }
+        }
+
+        // クロール完走を待ってから後始末（unique 制約を汚さない）
+        crawl.await.unwrap().unwrap();
+        sqlx::query("DELETE FROM articles WHERE feed_id = $1")
+            .bind(feed_id.0)
+            .execute(&db)
+            .await
+            .unwrap();
+        super::delete_feed(&state, feed_id).await.unwrap();
+
+        assert_eq!(
+            title.as_deref(),
+            Some("title-before-extract"),
+            "feed title was not set before auto extraction completed"
         );
     }
 
