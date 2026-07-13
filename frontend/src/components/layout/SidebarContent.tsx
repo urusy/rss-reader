@@ -4,6 +4,7 @@ import SavedViewList from "./SavedViewList";
 import { ThemeToggle } from "./ThemeToggle";
 import { FilterToggle } from "./FilterToggle";
 import { AddFeedDialog } from "./AddFeedDialog";
+import { SavePageDialog } from "./SavePageDialog";
 import { SearchBox } from "./SearchBox";
 
 const navItem = "block h-8 px-2 rounded-md text-sm leading-8 hover:bg-accent";
@@ -30,6 +31,10 @@ export default function SidebarContent(props: { onNavigate?: () => void }) {
       <A href="/" end class={navItem} activeClass={navActive} onClick={go}>
         すべての記事
       </A>
+      {/* 後で読む（保存ページ）。/saved/archive でも前方一致で点灯させたいので end なし */}
+      <A href="/saved" class={navItem} activeClass={navActive} onClick={go}>
+        後で読む
+      </A>
 
       <div class="flex-1 space-y-3 overflow-y-auto">
         <SavedViewList onNavigate={props.onNavigate} />
@@ -38,6 +43,7 @@ export default function SidebarContent(props: { onNavigate?: () => void }) {
 
       <div class="space-y-2 border-t border-border pt-3">
         <AddFeedDialog />
+        <SavePageDialog />
         <div class="flex flex-col gap-0.5">
           <A href="/manage" class={navItem} activeClass={navActive} onClick={go}>
             フィード管理

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>RSS Reader — 後で読む 設定</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 32rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #1f2937;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 0.25rem;
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.875rem;
+      }
+      button {
+        margin-top: 1.25rem;
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 6px;
+        background: #111827;
+        color: #fff;
+        font-size: 0.875rem;
+        cursor: pointer;
+      }
+      #status {
+        margin-left: 0.75rem;
+        font-size: 0.875rem;
+      }
+      p.hint {
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>RSS Reader — 後で読む</h1>
+    <p class="hint">
+      サーバー URL と、サーバーの .env に設定した SAVE_TOKEN を入力してください。
+      保存時に対象サーバーへのアクセス権限を求めるダイアログが出ます。
+    </p>
+    <label>
+      サーバー URL
+      <input id="server" type="url" placeholder="http://192.168.0.8:8080" />
+    </label>
+    <label>
+      SAVE_TOKEN
+      <input id="token" type="password" placeholder="トークン" />
+    </label>
+    <button id="save">保存</button><span id="status"></span>
+    <script src="options.js"></script>
+  </body>
+</html>

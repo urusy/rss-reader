@@ -41,6 +41,8 @@ pub async fn recent_nodes(pool: &PgPool, hours: i32, cap: i32) -> AppResult<Vec<
            FROM articles
            WHERE COALESCE(published_at, created_at) >= now() - make_interval(hours => $1)
              AND length(title) >= 3
+             -- 保存ページ（合成フィード）はクラスタ候補にしない
+             AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
            ORDER BY COALESCE(published_at, created_at) DESC
            LIMIT $2"#,
     )
@@ -63,6 +65,8 @@ pub async fn similarity_edges(
                FROM articles
                WHERE COALESCE(published_at, created_at) >= now() - make_interval(hours => $1)
                  AND length(title) >= 3
+                 -- 保存ページ（合成フィード）はクラスタ候補にしない
+                 AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
                ORDER BY COALESCE(published_at, created_at) DESC
                LIMIT $2
            )

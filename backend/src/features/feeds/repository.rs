@@ -32,18 +32,23 @@ pub async fn get(pool: &PgPool, id: FeedId) -> AppResult<Feed> {
     .ok_or(AppError::NotFound)
 }
 
+/// RSS フィードのみ列挙する。保存ページの合成フィード（kind='saved'）は
+/// サイドバー・manage・OPML export・スケジューラのクロール対象から除外
+/// （この 1 箇所が 4 接点をまとめてカバーする要衝）。
 pub async fn list_all(pool: &PgPool) -> AppResult<Vec<Feed>> {
     let rows = sqlx::query_as::<_, Feed>(
         r#"SELECT id, url, title, folder_id, created_at, last_fetched_at, priority, extract_full_content
-           FROM feeds ORDER BY created_at DESC"#,
+           FROM feeds WHERE kind = 'rss' ORDER BY created_at DESC"#,
     )
     .fetch_all(pool)
     .await?;
     Ok(rows)
 }
 
+/// kind='rss' ガード: 合成フィードを誤って DELETE すると CASCADE で保存ページが
+/// 全滅するため、API 経由では構造的に消せないようにする。
 pub async fn delete(pool: &PgPool, id: FeedId) -> AppResult<u64> {
-    let res = sqlx::query("DELETE FROM feeds WHERE id = $1")
+    let res = sqlx::query("DELETE FROM feeds WHERE id = $1 AND kind = 'rss'")
         .bind(id.0)
         .execute(pool)
         .await?;

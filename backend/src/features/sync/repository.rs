@@ -25,6 +25,7 @@ pub async fn list_subscriptions(pool: &PgPool) -> AppResult<Vec<SubscriptionRow>
     let rows = sqlx::query_as::<_, SubscriptionRow>(
         r#"SELECT f.id, f.url, f.title, fo.name AS folder_name
            FROM feeds f LEFT JOIN folders fo ON fo.id = f.folder_id
+           WHERE f.kind = 'rss'  -- 保存ページの合成フィードは同期に出さない
            ORDER BY f.created_at"#,
     )
     .fetch_all(pool)
@@ -74,6 +75,7 @@ pub struct StreamFilter {
 /// WHERE 句は「($k IS NULL OR ...)」型で固定し動的連結しない。asc/desc と
 /// cursor の比較方向だけが 2 変種（ユーザー入力は一切 SQL 文字列に入らない）。
 const STREAM_WHERE: &str = r#"a.muted_at IS NULL
+      AND a.feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
       AND ($1::uuid IS NULL OR a.feed_id = $1)
       AND ($2::text IS NULL OR a.feed_id IN (
             SELECT f.id FROM feeds f JOIN folders fo ON fo.id = f.folder_id
@@ -136,7 +138,7 @@ const ITEM_SELECT: &str = r#"SELECT a.short_id, a.url, a.title, a.content, a.aut
            EXISTS (SELECT 1 FROM article_stars s WHERE s.article_id = a.id) AS starred,
            a.feed_id, f.title AS feed_title, f.url AS feed_url, fo.name AS folder_name
       FROM articles a
-      JOIN feeds f ON f.id = a.feed_id
+      JOIN feeds f ON f.id = a.feed_id AND f.kind = 'rss'
       LEFT JOIN folders fo ON fo.id = f.folder_id"#;
 
 /// stream/items/contents 用。存在しない ID は黙って落ちる（エラーにしない）。
@@ -209,6 +211,7 @@ pub async fn mark_all_read(
         r#"UPDATE articles a SET is_read = true
            WHERE a.is_read = false
              AND a.muted_at IS NULL
+             AND a.feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
              AND a.created_at <= $1
              AND ($2::uuid IS NULL OR a.feed_id = $2)
              AND ($3::text IS NULL OR a.feed_id IN (
@@ -324,7 +327,7 @@ pub async fn unread_counts(pool: &PgPool) -> AppResult<Vec<UnreadRow>> {
         r#"SELECT a.feed_id, fo.name AS folder_name,
                   count(*) AS cnt, max(a.created_at) AS newest
            FROM articles a
-           JOIN feeds f ON f.id = a.feed_id
+           JOIN feeds f ON f.id = a.feed_id AND f.kind = 'rss'
            LEFT JOIN folders fo ON fo.id = f.folder_id
            WHERE a.is_read = false AND a.muted_at IS NULL
            GROUP BY a.feed_id, fo.name"#,

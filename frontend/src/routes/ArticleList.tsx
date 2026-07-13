@@ -6,7 +6,7 @@ import {
   For,
   Show,
 } from "solid-js";
-import { useSearchParams } from "@solidjs/router";
+import { A, useSearchParams } from "@solidjs/router";
 import { api, errorStatus, type Article, type Feed } from "@/lib/api";
 import { useSelection } from "@/lib/selection";
 import { useApp } from "@/lib/store";
@@ -32,14 +32,22 @@ export default function ArticleList() {
       : searchParams.article;
 
   // scope と未読フィルタを依存にしたソース。view scope のときだけ resolver を呼ぶ。
+  // savedV: 本文ペインのアーカイブ/削除で bump され、後で読む一覧を再フェッチする。
   const source = () => ({
     s: scope(),
     unread: app.state.filter === "unread" ? true : undefined,
+    savedV: app.state.savedListVersion,
   });
 
   const [articles, { refetch }] = createResource(source, async ({ s, unread }) => {
     if (s.kind === "view")
       return api.resolveSavedView(s.viewId, unread || undefined);
+    if (s.kind === "saved")
+      // 保存ページは saved スライス所有の一覧（listArticles は拡張しない）
+      return api.listSaved({
+        state: s.archived ? "archived" : "inbox",
+        unread,
+      });
     if (s.kind === "feed")
       return api.listArticles({ feed_id: s.feedId, unread });
     if (s.kind === "folder")
@@ -151,7 +159,7 @@ export default function ArticleList() {
           <Button size="sm" variant="outline" onClick={runScoring} disabled={scoring()}>
             {scoring() ? "スコア中…" : "スコアリング"}
           </Button>
-          <Show when={scope().kind !== "view"}>
+          <Show when={!["view", "saved"].includes(scope().kind)}>
             <Button
               size="sm"
               variant="outline"
@@ -167,6 +175,27 @@ export default function ArticleList() {
           </Show>
         </div>
       </div>
+
+      {/* 後で読む: マイリスト / アーカイブ切替（scope=パス原則に従い <A> ナビ） */}
+      <Show when={scope().kind === "saved"}>
+        <div class="flex gap-1">
+          <A
+            href="/saved"
+            end
+            class="rounded-md px-3 py-1.5 text-sm hover:bg-accent"
+            activeClass="bg-accent font-medium"
+          >
+            マイリスト
+          </A>
+          <A
+            href="/saved/archive"
+            class="rounded-md px-3 py-1.5 text-sm hover:bg-accent"
+            activeClass="bg-accent font-medium"
+          >
+            アーカイブ
+          </A>
+        </div>
+      </Show>
 
       <Show
         when={!articles.loading}

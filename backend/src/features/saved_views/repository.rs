@@ -124,6 +124,8 @@ pub async fn resolve(
              AND ($5 = false OR is_read = false)
              AND ($6::uuid[] IS NULL
                   OR id IN (SELECT article_id FROM article_tags WHERE tag_id = ANY($6)))
+             -- 保存ページ（合成フィード）はスマートビューに混ぜない
+             AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
            ORDER BY published_at DESC NULLS LAST, created_at DESC
            LIMIT $7"#,
     )

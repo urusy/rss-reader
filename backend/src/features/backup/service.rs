@@ -42,6 +42,7 @@ pub async fn export_ndjson(state: &AppState) -> AppResult<Body> {
     let feeds = repository::all_feeds(&state.db).await?;
     let articles = repository::all_articles(&state.db).await?;
     let read_later = repository::all_read_later(&state.db).await?;
+    let saved_pages = repository::all_saved_pages(&state.db).await?;
 
     let mut buf = String::new();
     buf.push_str(&to_line(&json!({
@@ -69,6 +70,9 @@ pub async fn export_ndjson(state: &AppState) -> AppResult<Body> {
     }
     for r in &read_later {
         buf.push_str(&to_line(&tagged(r, "read_later")?));
+    }
+    for s in &saved_pages {
+        buf.push_str(&to_line(&tagged(s, "saved_page")?));
     }
     Ok(Body::from(buf))
 }
@@ -116,6 +120,14 @@ pub async fn import_ndjson(state: &AppState, body: &str) -> AppResult<ImportSumm
                     .unwrap_or(r.article_id);
                 repository::upsert_read_later(&mut tx, &r, mapped).await?;
                 summary.read_later += 1;
+            }
+            Record::SavedPage(s) => {
+                let mapped = article_map
+                    .get(&s.article_id)
+                    .copied()
+                    .unwrap_or(s.article_id);
+                repository::upsert_saved_page(&mut tx, &s, mapped).await?;
+                summary.saved_pages += 1;
             }
             Record::Unknown => summary.skipped += 1,
         }

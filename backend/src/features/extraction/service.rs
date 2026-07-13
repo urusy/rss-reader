@@ -24,13 +24,41 @@ pub async fn extract_article(state: &AppState, id: ArticleId, force: bool) -> Ap
     let url = FetchUrl::parse(article.url.clone()).map_err(AppError::Validation)?;
     let html = fetch_html(state, &url).await?;
 
+    let is_saved_page = article.feed_id.0 == crate::features::saved::domain::SAVED_FEED_ID;
+
     match extract_main_content(&html, state.config.extract_min_chars) {
         Extracted::Ok(content) => {
-            articles_repo::save_full_content(&state.db, id, &content).await?;
+            if is_saved_page {
+                // 保存ページ（Pocket 風「後で読む」）: content が正典（pg_trgm 検索
+                // 索引・LLM 入力・digest snippet は content を読む）なので本文を
+                // content と full_content の両方へ書き、タイトルも確定させる。
+                // RSS 記事の content は絶対に書かない — クロールの upsert が
+                // フィード由来 content で上書きし返し、無限に揺れるため。
+                let title = crate::features::saved::domain::extract_page_title(&html);
+                crate::features::saved::repository::save_extracted(
+                    &state.db,
+                    id,
+                    title.as_deref(),
+                    &content,
+                )
+                .await?;
+            } else {
+                articles_repo::save_full_content(&state.db, id, &content).await?;
+            }
             articles_repo::get(&state.db, id).await
         }
         // Too thin: leave full_content NULL so display/AI fall back to content.
-        Extracted::TooThin => Ok(article),
+        // 保存ページはタイトルだけでも反映しておく（extracted_at は立てず、
+        // 再保存・force 抽出での再試行を生かす）。
+        Extracted::TooThin => {
+            if is_saved_page {
+                if let Some(title) = crate::features::saved::domain::extract_page_title(&html) {
+                    crate::features::saved::repository::save_title(&state.db, id, &title).await?;
+                    return articles_repo::get(&state.db, id).await;
+                }
+            }
+            Ok(article)
+        }
     }
 }
 

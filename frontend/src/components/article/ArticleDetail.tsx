@@ -6,8 +6,10 @@ import {
   onCleanup,
   Show,
 } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { api, errorStatus, type Article } from "@/lib/api";
 import { sanitizeArticleHtml } from "@/lib/sanitize";
+import { useSelection } from "@/lib/selection";
 import { useApp } from "@/lib/store";
 import {
   DWELL_MS,
@@ -45,6 +47,8 @@ import TagEditor from "@/components/TagEditor";
  */
 export default function ArticleDetail(props: { id: string | undefined }) {
   const app = useApp();
+  const scope = useSelection();
+  const navigate = useNavigate();
   const [article, { mutate }] = createResource(() => props.id, api.getArticle);
   const [busy, setBusy] = createSignal<
     "summarize" | "translate" | "extract" | null
@@ -82,6 +86,46 @@ export default function ArticleDetail(props: { id: string | undefined }) {
       }
     } finally {
       setSavingLater(false);
+    }
+  };
+
+  // --- 後で読む（ローカル保存）: /saved 配下で開いたときだけ描画するアクション ---
+  // 保存状態は Article に載せず scope（URL）で判定する（articles スライス無改変）。
+  const savedScope = () => {
+    const s = scope();
+    return s.kind === "saved" ? s : null;
+  };
+  const [savedBusy, setSavedBusy] = createSignal(false);
+  const backToSavedList = () => {
+    // navigate で ?article が消え、store の bump で一覧が再フェッチされる
+    app.bumpSavedList();
+    navigate(savedScope()?.archived ? "/saved/archive" : "/saved");
+  };
+  const toggleArchive = async () => {
+    const id = props.id;
+    const s = savedScope();
+    if (!id || !s) return;
+    setSavedBusy(true);
+    try {
+      await api.setSavedArchived(id, !s.archived);
+      backToSavedList();
+    } catch (e) {
+      alert(`更新に失敗しました: ${String(e)}`);
+    } finally {
+      setSavedBusy(false);
+    }
+  };
+  const deleteSaved = async () => {
+    const id = props.id;
+    if (!id) return;
+    setSavedBusy(true);
+    try {
+      await api.deleteSavedPage(id);
+      backToSavedList();
+    } catch (e) {
+      alert(`削除に失敗しました: ${String(e)}`);
+    } finally {
+      setSavedBusy(false);
     }
   };
 
@@ -349,6 +393,8 @@ export default function ArticleDetail(props: { id: string | undefined }) {
                 onConfirm={() => run("translate", true)}
               />
             </Show>
+            {/* Instapaper 転送（旧「後で読む」）。ローカル保存の新機能と名前が
+                衝突するため改名。Instapaper インポート完了後に削除予定。 */}
             <Button
               size="sm"
               variant="outline"
@@ -356,13 +402,59 @@ export default function ArticleDetail(props: { id: string | undefined }) {
               disabled={savingLater() || later()?.status === "added"}
             >
               {savingLater()
-                ? "保存中…"
+                ? "送信中…"
                 : later()?.status === "added"
-                  ? "保存済み ✓"
+                  ? "Instapaper 済 ✓"
                   : later()?.status === "failed"
-                    ? "再試行"
-                    : "後で読む"}
+                    ? "Instapaper 再試行"
+                    : "Instapaper へ送る"}
             </Button>
+            {/* 後で読む（ローカル保存）: /saved 配下で開いたときだけのアクション */}
+            <Show when={savedScope()}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={toggleArchive}
+                disabled={savedBusy()}
+              >
+                {savedBusy()
+                  ? "更新中…"
+                  : savedScope()?.archived
+                    ? "マイリストへ戻す"
+                    : "アーカイブ"}
+              </Button>
+              <Dialog>
+                <DialogTrigger
+                  class={buttonVariants({ size: "sm", variant: "ghost" })}
+                  disabled={savedBusy()}
+                >
+                  削除
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogTitle>保存したページを削除しますか？</DialogTitle>
+                  <DialogDescription>
+                    ページ本体と、付随するスター・タグ・ハイライト・要約もまとめて削除します。
+                    この操作は取り消せません。
+                  </DialogDescription>
+                  <div class="mt-4 flex justify-end gap-2">
+                    <DialogCloseTrigger
+                      class={buttonVariants({ size: "sm", variant: "outline" })}
+                    >
+                      キャンセル
+                    </DialogCloseTrigger>
+                    <DialogCloseTrigger
+                      class={buttonVariants({
+                        size: "sm",
+                        variant: "destructive",
+                      })}
+                      onClick={() => void deleteSaved()}
+                    >
+                      削除する
+                    </DialogCloseTrigger>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </Show>
             {/* 全文未取得なら「全文を取得」、取得済みなら抜粋/全文トグル。 */}
             <Show
               when={a().full_content}
@@ -390,6 +482,13 @@ export default function ArticleDetail(props: { id: string | undefined }) {
           <Show when={extractMiss()}>
             <p class="text-xs text-muted-foreground">
               全文を取得できませんでした（抜粋を表示中）。
+            </p>
+          </Show>
+
+          {/* 保存ページで本文が未抽出（背景抽出が未完了 or 失敗）のヒント */}
+          <Show when={savedScope() && !a().full_content && !a().content}>
+            <p class="text-xs text-muted-foreground">
+              本文を抽出中です。表示されない場合は「全文を取得」で再試行するか、元記事をお開きください。
             </p>
           </Show>
 

@@ -60,6 +60,8 @@ pub async fn recent_unread(pool: &PgPool, hours: i32) -> AppResult<Vec<DigestSou
            FROM articles
            WHERE is_read = false
              AND COALESCE(published_at, created_at) >= now() - make_interval(hours => $1)
+             -- 保存ページ（合成フィード）はダイジェスト対象外
+             AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
            ORDER BY COALESCE(published_at, created_at) DESC
            LIMIT 100"#,
     )

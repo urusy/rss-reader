@@ -69,6 +69,10 @@ pub struct AppConfig {
     /// GReader 互換同期 API (#29) を公開するか。無認証到達面を持つため既定 false
     /// （opt-in）。false ならルート自体を merge しない（存在を隠す）。
     pub sync_api_enabled: bool,
+    /// 保存 API（POST /api/save、iOS ショートカット / ブラウザ拡張用）の固定
+    /// Bearer トークン。None = ルート自体を merge しない（存在を隠す）。
+    /// backup_token と同じ「.env の静的トークン + constant_time_eq」方式。
+    pub save_token: Option<String>,
 }
 
 impl AppConfig {
@@ -213,6 +217,8 @@ impl AppConfig {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
+        let save_token = std::env::var("SAVE_TOKEN").ok().filter(|v| !v.is_empty());
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -247,6 +253,7 @@ impl AppConfig {
             vapid_private_key,
             usage_retention_days,
             sync_api_enabled,
+            save_token,
         })
     }
 
@@ -288,6 +295,7 @@ impl AppConfig {
             vapid_private_key: None,
             usage_retention_days: 365,
             sync_api_enabled: false,
+            save_token: None,
         }
     }
 }

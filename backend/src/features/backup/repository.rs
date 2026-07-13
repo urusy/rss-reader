@@ -4,7 +4,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::domain::{ArticleRow, BackupRunRow, FeedRow, FolderRow, ReadLaterRow};
+use super::domain::{ArticleRow, BackupRunRow, FeedRow, FolderRow, ReadLaterRow, SavedPageRow};
 use crate::shared::error::AppResult;
 
 // ---- export (read, FK-dependency order) ----
@@ -20,8 +20,17 @@ pub async fn all_folders(pool: &PgPool) -> AppResult<Vec<FolderRow>> {
 
 pub async fn all_feeds(pool: &PgPool) -> AppResult<Vec<FeedRow>> {
     let rows = sqlx::query_as::<_, FeedRow>(
-        "SELECT id, url, title, folder_id, created_at, last_fetched_at \
+        "SELECT id, url, title, folder_id, created_at, last_fetched_at, kind \
          FROM feeds ORDER BY created_at",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+pub async fn all_saved_pages(pool: &PgPool) -> AppResult<Vec<SavedPageRow>> {
+    let rows = sqlx::query_as::<_, SavedPageRow>(
+        "SELECT article_id, saved_at, archived_at FROM saved_pages ORDER BY saved_at",
     )
     .fetch_all(pool)
     .await?;
@@ -71,8 +80,8 @@ pub async fn upsert_folder(tx: &mut Transaction<'_, Postgres>, r: &FolderRow) ->
 /// (used to remap article.feed_id).
 pub async fn upsert_feed(tx: &mut Transaction<'_, Postgres>, r: &FeedRow) -> AppResult<Uuid> {
     let id: Uuid = sqlx::query_scalar(
-        r#"INSERT INTO feeds (id, url, title, folder_id, created_at, last_fetched_at)
-           VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO feeds (id, url, title, folder_id, created_at, last_fetched_at, kind)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (url) DO UPDATE
              SET title = EXCLUDED.title,
                  folder_id = COALESCE(EXCLUDED.folder_id, feeds.folder_id),
@@ -85,9 +94,31 @@ pub async fn upsert_feed(tx: &mut Transaction<'_, Postgres>, r: &FeedRow) -> App
     .bind(r.folder_id)
     .bind(r.created_at)
     .bind(r.last_fetched_at)
+    .bind(&r.kind)
     .fetch_one(&mut **tx)
     .await?;
     Ok(id)
+}
+
+/// saved_pages の upsert。article_id は呼び出し側で再マップ済みの実 id。
+/// archived_at は「消さない」方向でマージ（is_read の OR と同じ token 防御思想）。
+pub async fn upsert_saved_page(
+    tx: &mut Transaction<'_, Postgres>,
+    r: &SavedPageRow,
+    mapped_article_id: Uuid,
+) -> AppResult<()> {
+    sqlx::query(
+        r#"INSERT INTO saved_pages (article_id, saved_at, archived_at)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (article_id) DO UPDATE
+             SET archived_at = COALESCE(saved_pages.archived_at, EXCLUDED.archived_at)"#,
+    )
+    .bind(mapped_article_id)
+    .bind(r.saved_at)
+    .bind(r.archived_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 /// articles.url is UNIQUE. feed_id is the caller-remapped value. LLM cache and
@@ -221,6 +252,7 @@ mod tests {
             folder_id: None,
             created_at: chrono::Utc::now(),
             last_fetched_at: None,
+            kind: "rss".into(),
         }
     }
 

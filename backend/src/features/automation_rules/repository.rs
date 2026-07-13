@@ -133,6 +133,8 @@ pub async fn fetch_all_articles(pool: &PgPool, limit: i64) -> AppResult<Vec<Pend
     let rows = sqlx::query_as::<_, PendingArticle>(
         r#"SELECT id, feed_id, title, content, author, published_at
            FROM articles
+           -- 保存ページ（合成フィード）は手動バックフィルの対象外
+           WHERE feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
            ORDER BY created_at DESC
            LIMIT $1"#,
     )

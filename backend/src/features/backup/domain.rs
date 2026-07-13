@@ -26,6 +26,7 @@ pub enum Record {
     Feed(FeedRow),
     Article(ArticleRow),
     ReadLater(ReadLaterRow),
+    SavedPage(SavedPageRow),
     Unknown,
 }
 
@@ -45,6 +46,25 @@ pub struct FeedRow {
     pub folder_id: Option<Uuid>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_fetched_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// 'rss' | 'saved'（保存ページの合成フィード）。NDJSON のレコード種別タグが
+    /// `kind` なので wire 上は `feed_kind` に改名（sqlx は列 `kind` を
+    /// フィールド名で拾うため FromRow 側は無影響）。feed_kind の無い
+    /// 旧バックアップは serde default で 'rss' に落ちる（後方互換）。
+    #[serde(rename = "feed_kind", default = "default_feed_kind")]
+    pub kind: String,
+}
+
+fn default_feed_kind() -> String {
+    "rss".to_string()
+}
+
+/// 保存ページ（Pocket 風「後で読む」）の sidecar 状態。article_id は
+/// import 時に url-unique upsert の実 id へ再マップされる（read_later と同型）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SavedPageRow {
+    pub article_id: Uuid,
+    pub saved_at: chrono::DateTime<chrono::Utc>,
+    pub archived_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
@@ -93,6 +113,8 @@ pub struct ImportSummary {
     pub feeds: u64,
     pub articles: u64,
     pub read_later: u64,
+    #[serde(default)]
+    pub saved_pages: u64,
     pub skipped: u64,
 }
 
@@ -117,6 +139,9 @@ pub fn parse_line(line: &str) -> Result<Option<Record>, String> {
         }
         "read_later" => Record::ReadLater(
             serde_json::from_value(v).map_err(|e| format!("bad read_later: {e}"))?,
+        ),
+        "saved_page" => Record::SavedPage(
+            serde_json::from_value(v).map_err(|e| format!("bad saved_page: {e}"))?,
         ),
         _ => Record::Unknown,
     };
@@ -199,6 +224,25 @@ mod tests {
     }
 
     #[test]
+    fn parse_line_saved_page() {
+        let line = r#"{"kind":"saved_page","article_id":"22222222-2222-2222-2222-222222222222","saved_at":"2026-07-08T00:00:00Z","archived_at":null}"#;
+        match parse_line(line).unwrap().unwrap() {
+            Record::SavedPage(s) => assert!(s.archived_at.is_none()),
+            _ => panic!("expected saved_page"),
+        }
+    }
+
+    #[test]
+    fn parse_line_feed_without_kind_defaults_to_rss() {
+        // kind の無い旧バックアップ形式が 'rss' として読めること（後方互換）
+        let line = r#"{"kind":"feed","id":"11111111-1111-1111-1111-111111111111","url":"https://a/f","title":null,"folder_id":null,"created_at":"2026-06-30T00:00:00Z","last_fetched_at":null}"#;
+        match parse_line(line).unwrap().unwrap() {
+            Record::Feed(f) => assert_eq!(f.kind, "rss"),
+            _ => panic!("expected feed"),
+        }
+    }
+
+    #[test]
     fn parse_line_unknown_kind_is_unknown() {
         assert_eq!(
             parse_line(r#"{"kind":"tag","name":"x"}"#).unwrap().unwrap(),
@@ -259,6 +303,7 @@ mod tests {
             folder_id: None,
             created_at: chrono::DateTime::from_timestamp(0, 0).unwrap(),
             last_fetched_at: None,
+            kind: "rss".into(),
         };
         let mut v = serde_json::to_value(&f).unwrap();
         v["kind"] = "feed".into();

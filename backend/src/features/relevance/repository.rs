@@ -53,6 +53,8 @@ pub async fn unread_candidates(pool: &PgPool, limit: i64) -> AppResult<Vec<Score
                   COALESCE(NULLIF(summary, ''), LEFT(content, 500)) AS snippet
            FROM articles
            WHERE is_read = false
+             -- 保存ページ（合成フィード）はスコアリング対象外（LLM トークン浪費防止）
+             AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
            ORDER BY COALESCE(published_at, created_at) DESC
            LIMIT $1"#,
     )

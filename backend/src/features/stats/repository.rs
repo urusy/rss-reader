@@ -7,9 +7,12 @@ use crate::shared::error::AppResult;
 pub async fn fetch(pool: &PgPool) -> AppResult<Stats> {
     let (feeds, articles, unread) = sqlx::query_as::<_, (i64, i64, i64)>(
         r#"SELECT
-             (SELECT COUNT(*) FROM feeds),
+             (SELECT COUNT(*) FROM feeds WHERE kind = 'rss'),
              (SELECT COUNT(*) FROM articles),
-             (SELECT COUNT(*) FROM articles WHERE is_read = false)"#,
+             -- 未読バッジは全画面常時表示なので保存ページを混ぜない
+             (SELECT COUNT(*) FROM articles
+              WHERE is_read = false
+                AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss'))"#,
     )
     .fetch_one(pool)
     .await?;

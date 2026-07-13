@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "RSS Reader — 後で読む",
+  "version": "0.1.0",
+  "description": "表示中のページを自分の RSS Reader に保存する（Pocket 風・後で読む）",
+  "action": {
+    "default_title": "このページを後で読むに保存",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "permissions": ["storage", "activeTab"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

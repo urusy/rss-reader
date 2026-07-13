@@ -23,6 +23,8 @@ pub async fn list(
              AND ($4 = false
                   OR feed_id IN (SELECT id FROM feeds WHERE folder_id IS NULL))
              AND ($5 = true OR muted_at IS NULL)
+             -- 保存ページ（合成フィード）は通常一覧に混ぜない（/api/saved が持つ）
+             AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')
            ORDER BY published_at DESC NULLS LAST, created_at DESC
            LIMIT 200"#,
     )
@@ -44,7 +46,9 @@ pub async fn mark_all_read(pool: &PgPool, feed_id: Option<FeedId>) -> AppResult<
         r#"UPDATE articles
            SET is_read = true
            WHERE is_read = false
-             AND ($1::uuid IS NULL OR feed_id = $1)"#,
+             AND ($1::uuid IS NULL OR feed_id = $1)
+             -- 全フィード一括既読でも保存ページの未読は潰さない
+             AND feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')"#,
     )
     .bind(feed_id.map(|f| f.0))
     .execute(pool)

@@ -26,6 +26,10 @@ export interface UiState {
   navItems: { id: string; url: string }[];
   // ? のチートシート overlay 開閉。#18
   helpOpen: boolean;
+  // 後で読む一覧の再取得トリガ。ArticleDetail のアーカイブ/削除が bump し、
+  // ArticleList の resource source に含めて再フェッチさせる（readIds と同じ
+  // 兄弟ペイン間共有の発想）。
+  savedListVersion: number;
 }
 
 export interface UiStore {
@@ -47,6 +51,7 @@ export interface UiStore {
   refetchFolders(): void;
   savedViews: Resource<SavedView[]>; // #27 スマートビュー
   refetchSavedViews(): void;
+  bumpSavedList(): void; // 後で読む一覧の再取得を促す
 }
 
 const Ctx = createContext<UiStore>();
@@ -59,6 +64,7 @@ export const AppProvider: ParentComponent = (props) => {
     readIds: {},
     navItems: [],
     helpOpen: false,
+    savedListVersion: 0,
   });
   const [relevanceScores, { refetch: refetchRelevanceScores }] = createResource(
     () => api.listRelevanceScores(),
@@ -104,6 +110,7 @@ export const AppProvider: ParentComponent = (props) => {
     refetchSavedViews: () => {
       void refetchSavedViews();
     },
+    bumpSavedList: () => setState("savedListVersion", (v) => v + 1),
   };
   return <Ctx.Provider value={store}>{props.children}</Ctx.Provider>;
 };

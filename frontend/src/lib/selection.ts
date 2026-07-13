@@ -5,7 +5,8 @@ export type Scope =
   | { kind: "all" }
   | { kind: "feed"; feedId: string }
   | { kind: "folder"; folderId: string } // folderId は "unclassified" センチネルを取りうる
-  | { kind: "view"; viewId: string }; // #27 スマートビュー（仮想フィード）
+  | { kind: "view"; viewId: string } // #27 スマートビュー（仮想フィード）
+  | { kind: "saved"; archived: boolean }; // 後で読む（保存ページ）。/saved=マイリスト /saved/archive=アーカイブ
 
 /** 純粋関数（vitest 対象）。URL pathname と params から scope を決める。 */
 export function scopeFromPath(
@@ -18,6 +19,8 @@ export function scopeFromPath(
     return { kind: "folder", folderId: params.folderId };
   if (pathname.startsWith("/views/") && params.viewId)
     return { kind: "view", viewId: params.viewId };
+  if (pathname === "/saved/archive") return { kind: "saved", archived: true };
+  if (pathname.startsWith("/saved")) return { kind: "saved", archived: false };
   return { kind: "all" };
 }
 

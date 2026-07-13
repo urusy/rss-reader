@@ -512,6 +512,34 @@ export const api = {
     }),
   getStats: () => http<Stats>("/api/stats"),
 
+  // --- 後で読む（ローカル保存 = Pocket 風。Instapaper 転送とは別物） ---
+  // URL を保存。201 即返しで本文抽出は背景実行（フィード追加と同型）。
+  savePage: (url: string) =>
+    http<Article>("/api/saved", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
+  // 一覧。state: inbox=マイリスト / archived / all。unread=true で未読のみ。
+  listSaved: (params?: {
+    state?: "inbox" | "archived" | "all";
+    unread?: boolean;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.state) q.set("state", params.state);
+    if (params?.unread) q.set("unread", "true");
+    const qs = q.toString();
+    return http<Article[]>(`/api/saved${qs ? `?${qs}` : ""}`);
+  },
+  // アーカイブ（true）/ マイリストへ戻す（false）。
+  setSavedArchived: (articleId: string, archived: boolean) =>
+    http<void>(`/api/saved/${articleId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ archived }),
+    }),
+  // 保存ページの削除（記事ごと消える。RSS 記事のブックマークなら解除のみ）。
+  deleteSavedPage: (articleId: string) =>
+    http<void>(`/api/saved/${articleId}`, { method: "DELETE" }),
+
   getInstapaperStatus: () => http<InstapaperStatus>("/api/instapaper/status"),
   saveInstapaperCredentials: (creds: { username: string; password: string }) =>
     http<InstapaperStatus>("/api/instapaper/credentials", {

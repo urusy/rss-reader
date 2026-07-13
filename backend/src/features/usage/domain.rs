@@ -36,8 +36,16 @@ pub fn feature_key(method: &Method, matched_path: &str) -> Option<&'static str> 
         ("POST", "/api/articles/{id}/highlights") => Some("highlight"),
         ("PUT", "/api/articles/{id}/tags") => Some("tag_assign"),
         ("POST", "/api/articles/{id}/suggest-tags") => Some("tag_suggest"),
-        // 後で読む
+        // 後で読む（Instapaper 転送・撤去予定の旧機能）
         ("POST", "/api/read-later") => Some("read_later"),
+        // 後で読む（ローカル保存 = saved スライス）。パスのプレースホルダ名は
+        // ルート登録テンプレートと一字一句一致させること（ズレると黙って未計測）。
+        ("POST", "/api/saved") => Some("saved_save"),
+        ("PATCH", "/api/saved/{article_id}") => Some("saved_archive"),
+        ("DELETE", "/api/saved/{article_id}") => Some("saved_delete"),
+        // トークン保存面（iOS ショートカット / ブラウザ拡張）。public 側だが
+        // saved::public_routes がルーター単位で track_usage を layer する。
+        ("POST", "/api/save") => Some("saved_capture"),
         // フィード管理
         ("POST", "/api/feeds") => Some("feed_add"),
         ("POST", "/api/feeds/{id}/refresh") => Some("feed_refresh"),
@@ -187,6 +195,10 @@ mod tests {
         ("PUT", "/api/articles/{id}/tags", "tag_assign"),
         ("POST", "/api/articles/{id}/suggest-tags", "tag_suggest"),
         ("POST", "/api/read-later", "read_later"),
+        ("POST", "/api/saved", "saved_save"),
+        ("PATCH", "/api/saved/{article_id}", "saved_archive"),
+        ("DELETE", "/api/saved/{article_id}", "saved_delete"),
+        ("POST", "/api/save", "saved_capture"),
         ("POST", "/api/feeds", "feed_add"),
         ("POST", "/api/feeds/{id}/refresh", "feed_refresh"),
         ("DELETE", "/api/feeds/{id}", "feed_delete"),
@@ -261,6 +273,7 @@ mod tests {
             ("GET", "/api/usage/summary"),
             ("POST", "/api/usage/events"),
             ("GET", "/api/read-later"),
+            ("GET", "/api/saved"), // 一覧閲覧は記録しない（GET /api/articles と同方針）
             ("GET", "/api/relevance/scores"),
             ("GET", "/api/saved-views"),
             ("POST", "/api/rules/apply"),

@@ -19,6 +19,7 @@ pub mod mute_rules;
 pub mod notifications;
 pub mod opml;
 pub mod relevance;
+pub mod saved;
 pub mod saved_views;
 pub mod search;
 pub mod stats;
@@ -53,6 +54,12 @@ pub fn router(state: AppState) -> Router {
     if state.config.sync_api_enabled {
         public = public.merge(sync::routes(&state));
     }
+    // 保存 API（POST /api/save、iOS ショートカット / ブラウザ拡張用）。
+    // SAVE_TOKEN 未設定なら None → ルート自体が生えない（存在を隠す）。
+    // 認証は saved::handler::require_save_token（Bearer 固定トークン）が担う。
+    if let Some(save_public) = saved::public_routes(&state) {
+        public = public.merge(save_public);
+    }
 
     let protected = Router::new()
         .merge(auth::protected_routes())
@@ -76,6 +83,7 @@ pub fn router(state: AppState) -> Router {
         .merge(tags::routes())
         .merge(digest::routes())
         .merge(relevance::routes())
+        .merge(saved::routes())
         .merge(clustering::routes())
         .merge(automation_rules::routes())
         .merge(backup::routes())

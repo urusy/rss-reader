@@ -95,14 +95,17 @@ pub async fn apply_rule(pool: &PgPool, field: &str, pattern: &str, action: &str)
     let col = domain::field_column(field)?;
     let needle = format!("%{}%", domain::escape_like(pattern.trim()));
 
+    // 保存ページ（合成フィード）はミュートルールの対象外（勝手な既読化/非表示で
+    // 「後で読む」から黙って消えるのを防ぐ）。
+    const NOT_SAVED: &str = "feed_id NOT IN (SELECT id FROM feeds WHERE kind <> 'rss')";
     let sql = match action {
         "hide" => format!(
             "UPDATE articles SET muted_at = now() \
-             WHERE muted_at IS NULL AND {col} ILIKE $1 ESCAPE '\\'"
+             WHERE muted_at IS NULL AND {NOT_SAVED} AND {col} ILIKE $1 ESCAPE '\\'"
         ),
         "mark_read" => format!(
             "UPDATE articles SET is_read = true \
-             WHERE is_read = false AND {col} ILIKE $1 ESCAPE '\\'"
+             WHERE is_read = false AND {NOT_SAVED} AND {col} ILIKE $1 ESCAPE '\\'"
         ),
         other => return Err(AppError::Validation(format!("unknown action: {other}"))),
     };

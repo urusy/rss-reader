@@ -34,4 +34,16 @@ describe("scopeFromPath", () => {
       viewId: "v1",
     });
   });
+  it("/saved は saved scope（マイリスト）", () => {
+    expect(scopeFromPath("/saved", {})).toEqual({
+      kind: "saved",
+      archived: false,
+    });
+  });
+  it("/saved/archive は saved scope（アーカイブ）", () => {
+    expect(scopeFromPath("/saved/archive", {})).toEqual({
+      kind: "saved",
+      archived: true,
+    });
+  });
 });
